@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "src",
+    "outDir": "out-test",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/main/number/parseNumber.ts", "src/main/number/parseNumber.test.ts"]
+}
