@@ -17,9 +17,10 @@ const FIELD_LABELS: Record<string, RegExp> = {
 }
 
 const AVATAR_BLOCK_RE = /<div[^>]+id="avatar-waterfall"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i
-const ACTOR_BOX_RE = /<a\b(?=[^>]*class="avatar-box")[^>]*>([\s\S]*?)<\/a>/gi
+const ACTOR_BOX_RE = /<a\b(?=[^>]*class="avatar-box")[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
 const ACTOR_NAME_RE = /<span[^>]*>([\s\S]*?)<\/span>/i
 const ACTOR_IMG_RE = /<img[^>]+src="([^"]+)"/i
+const MALE_ACTOR_HREF_RE = /\/male(?:\/|$|\?)/i
 
 const GENRE_RE = /<span[^>]+class="genre"[^>]*>\s*<label[^>]*>(?:(?!<\/label>)[\s\S])*?<a[^>]*>([\s\S]*?)<\/a>\s*<\/label>\s*<\/span>/gi
 const SAMPLE_A_RE = /<a\b(?=[^>]*class="sample-box")[^>]*href="([^"]+)"/gi
@@ -125,7 +126,9 @@ export function parseJavBusDetail(
   let am: RegExpExecArray | null
   ACTOR_BOX_RE.lastIndex = 0
   while ((am = ACTOR_BOX_RE.exec(avatarBlock)) !== null) {
-    const block = am[1]
+    const href = am[1] ?? ''
+    if (MALE_ACTOR_HREF_RE.test(href)) continue
+    const block = am[2]
     const nameMatch = block.match(ACTOR_NAME_RE)
     if (!nameMatch) continue
     const name = stripTags(nameMatch[1])

@@ -155,9 +155,12 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
    - ✅ 海报裁切策略对齐：无高清竖版海报可抓，统一由横版 fanart 裁切；`cropMode` 改为 `right/center/full`，默认 `right`（右半边正面封面），详情预览与落盘一致
    - ✅ 主进程图片代理（`media:readImage` IPC，远程补 Referer、本地 `file://` 读盘回传 data URL）
    - ✅ 统一时间线活动行日志（下载各阶段原位刷新、结束提交为日志、底栏常驻活动位）
+   - ✅ 多数据源接入：JavBus / JavDB / Jav321 / FC2 / Heyzo，按番号类型路由（HEYZO/FC2 专用源优先，零开销跳过不匹配番号）
+   - ✅ 统一收纳根目录模式（`centralLibraryDir`，视频移入指定根目录下番号子文件夹）
+   - ✅ 详情面板就地手动修正番号（番号旁编辑按钮），以新番号重新刮削并记录手动标记
+   - ✅ 演员仅保留女优（JavDB 按 ♀/♂、Jav321/JavBus 按 `/star/` vs `/male/` 路径区分）；演员头像按演员名存放、跨作品复用，已存在则跳过下载
    - 🔲 软链接模式
    - 🔲 番号识别容错、单文件重刮
-   - 🔲 更多数据源
 4. 工具页功能补齐 + electron-builder 打包。
 
 ## 8. 与用户协作偏好

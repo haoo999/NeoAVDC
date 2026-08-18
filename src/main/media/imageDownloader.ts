@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { CropMode, ScrapedMetadata } from '../../shared/types'
 import type { HttpClient } from '../net/httpClient'
+import type { ParsedName } from '../number/parseNumber'
 import {
   actorThumbPath,
   buildMediaPaths,
@@ -11,6 +12,7 @@ import {
   posterPath
 } from './fileNames'
 import { processPoster, removeWatermark } from './imageProcessor'
+import { DMM_REFERER, dmmCoverUrls, dmmSampleGroups } from './dmmCdn'
 
 export type DownloadStage = 'cover' | 'sample' | 'actor'
 
@@ -33,6 +35,11 @@ export interface ImageDownloadOptions {
   downloadSamples: boolean
   cropMode: CropMode
   removeWatermark: boolean
+  // 用于拼 DMM CDN 回退 URL；手动改番号时 parsed 为 null，仍可由 number 兜底
+  number: string
+  parsed: ParsedName | null
+  // DMM 是否作为勾选数据源启用（决定是否用其 CDN 兜底图片）
+  dmmEnabled: boolean
   onProgress?: ProgressCallback
 }
 
@@ -61,6 +68,29 @@ export function fileExists(targetPath: string): boolean {
   } catch {
     return false
   }
+}
+
+const ACTOR_AVATAR_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+
+function findExistingActorAvatar(actorsDir: string, actorName: string): string | null {
+  // 头像扩展名在下载前未知（由响应魔术字节判定），
+  // 因此按演员名依次探测常见扩展名，命中任意一个即视为已下载，直接复用。
+  const safe = path.basename(actorThumbPath(actorsDir, actorName, ''))
+  try {
+    for (const file of fs.readdirSync(actorsDir)) {
+      const parsed = path.parse(file)
+      if (
+        parsed.name === safe &&
+        ACTOR_AVATAR_EXTS.includes(parsed.ext.toLowerCase()) &&
+        fs.statSync(path.join(actorsDir, file)).isFile()
+      ) {
+        return path.join(actorsDir, file)
+      }
+    }
+  } catch {
+    // actors 目录尚不存在，等同于没有已存头像
+  }
+  return null
 }
 
 export function detectMime(buffer: Buffer): string {
@@ -146,14 +176,21 @@ async function downloadCover(
   getBinary: BinaryGetter,
   data: ScrapedMetadata,
   referer: string,
-  preferHd: boolean
+  preferHd: boolean,
+  dmmFallback: string[]
 ): Promise<{ buffer: Buffer; ext: string } | null> {
   const primary = preferHd ? data.coverUrl : data.coverThumbUrl ?? data.coverUrl
   const fallback = preferHd ? data.coverThumbUrl : undefined
   const first = primary ? await downloadBuffer(getBinary, primary, referer) : null
   if (first) return first
   if (fallback && fallback !== primary) {
-    return await downloadBuffer(getBinary, fallback, referer)
+    const second = await downloadBuffer(getBinary, fallback, referer)
+    if (second) return second
+  }
+  // 元数据源封面失败时，回退到 DMM 图片 CDN（仅在 DMM 被勾选时）
+  for (const url of dmmFallback) {
+    const hit = await downloadBuffer(getBinary, url, DMM_REFERER)
+    if (hit) return hit
   }
   return null
 }
@@ -169,17 +206,32 @@ export async function downloadImages(
   const result: ImageDownloadResult = { poster: null, fanart: null, samples: [], actors: [] }
   const report = (progress: DownloadProgress): void => options.onProgress?.(progress)
 
+  // DMM CDN 只在被勾选时作为图片兜底；它只对有码字母数字番号有意义
+  const useDmm = options.dmmEnabled
+  const dmmCoverFallback = useDmm ? dmmCoverUrls(options.number, options.parsed) : []
+  const dmmSamples = useDmm ? dmmSampleGroups(options.number, options.parsed) : []
+
   report({ stage: 'cover', index: 1, total: 2 })
-  const cover = await downloadCover(getBinary, data, referer, options.downloadHdCover)
+  const cover = await downloadCover(
+    getBinary,
+    data,
+    referer,
+    options.downloadHdCover,
+    dmmCoverFallback
+  )
   if (cover) {
     const ext = chooseExtension(cover.buffer, inferExtension(data.coverUrl ?? ''))
     const poster = posterPath(paths.dir, paths.baseName, ext)
     const fanart = fanartPath(paths.dir, paths.baseName, ext)
 
     report({ stage: 'cover', index: 2, total: 2 })
+    // Heyzo / FC2 / 欧美片的 fanart 不是 DMM 式光盘外包扫描件，本身就是横版成品封面，
+    // 强制使用 'full'（不裁切）；其他有码源沿用用户设置的 cropMode。
+    // 注意：'full' 仅跳过裁切，EXIF 旋转与去水印仍会执行。
+    const crop = data.posterNoCrop ? 'full' : options.cropMode
     const processed = await processPoster({
       buffer: cover.buffer,
-      crop: options.cropMode,
+      crop,
       removeWatermark: options.removeWatermark
     })
     writeFileSafe(poster, processed.buffer)
@@ -196,24 +248,62 @@ export async function downloadImages(
   })
 
   if (options.downloadSamples) {
-    for (let i = 0; i < data.sampleUrls.length; i++) {
-      const url = data.sampleUrls[i]
-      report({ stage: 'sample', index: i + 1, total: data.sampleUrls.length })
-      const sample = await downloadBuffer(getBinary, url, referer)
-      if (!sample) continue
-      const buffer = options.removeWatermark ? await removeWatermark(sample.buffer) : sample.buffer
-      const ext = chooseExtension(buffer, inferExtension(url))
-      const target = extraThumbPath(paths.extraThumbsDir, i, ext)
-      writeFileSafe(target, buffer)
-      result.samples.push(target)
+    if (data.sampleUrls.length > 0) {
+      for (let i = 0; i < data.sampleUrls.length; i++) {
+        const url = data.sampleUrls[i]
+        report({ stage: 'sample', index: i + 1, total: data.sampleUrls.length })
+        const sample = await downloadBuffer(getBinary, url, referer)
+        if (!sample) continue
+        const buffer = options.removeWatermark
+          ? await removeWatermark(sample.buffer)
+          : sample.buffer
+        const ext = chooseExtension(buffer, inferExtension(url))
+        const target = extraThumbPath(paths.extraThumbsDir, i, ext)
+        writeFileSafe(target, buffer)
+        result.samples.push(target)
+      }
+      report({
+        stage: 'sample',
+        index: data.sampleUrls.length,
+        total: data.sampleUrls.length,
+        done: true,
+        count: result.samples.length
+      })
+    } else if (dmmSamples.length > 0) {
+      // 元数据源未提供样张时，用 DMM CDN 兜底：按 cid 候选顺序探测，
+      // 命中一个 cid 后顺序拉取，首张 404 即停止该 cid（样张编号从 1 连续）。
+      let idx = 0
+      for (const group of dmmSamples) {
+        let any = false
+        for (const url of group) {
+          idx += 1
+          report({ stage: 'sample', index: idx, total: dmmSamples.length * group.length })
+          const sample = await downloadBuffer(getBinary, url, DMM_REFERER)
+          if (!sample) {
+            if (any) break
+            continue
+          }
+          any = true
+          const buffer = options.removeWatermark
+            ? await removeWatermark(sample.buffer)
+            : sample.buffer
+          const ext = chooseExtension(buffer, inferExtension(url))
+          const target = extraThumbPath(paths.extraThumbsDir, result.samples.length, ext)
+          writeFileSafe(target, buffer)
+          result.samples.push(target)
+        }
+        if (any) break
+      }
+      report({
+        stage: 'sample',
+        index: idx,
+        total: idx,
+        done: true,
+        count: result.samples.length
+      })
+    } else {
+      report({ stage: 'sample', index: 0, total: 0, done: true, count: 0 })
     }
-    report({
-      stage: 'sample',
-      index: data.sampleUrls.length,
-      total: data.sampleUrls.length,
-      done: true,
-      count: result.samples.length
-    })
   }
 
   if (options.downloadActorAvatars) {
@@ -222,6 +312,13 @@ export async function downloadImages(
     for (const actor of data.actors) {
       if (!actor.avatarUrl) continue
       idx += 1
+      // 已存在同名头像（任意常见扩展名）则直接复用，避免重复下载覆盖
+      const existing = findExistingActorAvatar(paths.actorsDir, actor.name)
+      if (existing) {
+        report({ stage: 'actor', index: idx, total, label: actor.name })
+        result.actors.push(existing)
+        continue
+      }
       report({ stage: 'actor', index: idx, total, label: actor.name })
       const img = await downloadBuffer(getBinary, actor.avatarUrl, referer)
       if (!img) continue

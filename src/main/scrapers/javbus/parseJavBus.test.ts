@@ -50,6 +50,10 @@ const SAMPLE_HTML = `<!DOCTYPE html>
     <div class="photo-frame"><img src="https://www.javbus.com/images/actress/nowprinting.gif" title=""/></div>
     <span>女優B</span>
   </a>
+  <a class="avatar-box" href="https://www.javbus.com/male/9">
+    <div class="photo-frame"><img src="https://www.javbus.com/images/actor/9.jpg" title="男優X"/></div>
+    <span>男優X</span>
+  </a>
 </div>
 </body>
 </html>`
@@ -113,6 +117,10 @@ test('parseJavBusDetail 完整提取字段', () => {
   assert.equal(data!.actors[0].avatarUrl, 'https://www.javbus.com/images/actress/1.jpg')
   assert.equal(data!.actors[1].name, '女優B')
   assert.equal(data!.actors[1].avatarUrl, undefined)
+  assert.ok(
+    !data!.actors.some(a => a.name === '男優X'),
+    '男优应被剔除，只保留女优'
+  )
   assert.equal(data!.sampleUrls.length, 2)
   assert.equal(data!.sourceUrl, 'https://www.javbus.com/ABC-123')
   assert.equal(data!.isUncensored, false)

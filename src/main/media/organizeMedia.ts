@@ -1,95 +1,40 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { FolderNamingMode, ScrapedMetadata } from '../../shared/types'
+import { isSubtitleFile } from '../number/parseNumber'
 import { buildFolderName, isInsideOrganizedFolder } from './fileNames'
 
-const SUBTITLE_EXTS = new Set(['.srt', '.ass', '.ssa', '.vtt', '.sub', '.sup', '.lrc'])
+export interface OrganizeOptions {
+  followSubtitles?: boolean
+  /**
+   * 统一收纳根目录。提供时番号子文件夹建在此目录下；不提供则就地收纳（视频所在目录）。
+   */
+  targetRootDir?: string
+}
 
 export interface OrganizeResult {
-  videoPath: string
-  folderPath: string
   moved: boolean
+  folderPath: string
+  videoPath: string
+  sidecarDir: string
   movedSidecars: string[]
 }
 
-interface OrganizeOptions {
-  followSubtitles?: boolean
-}
-
-// 原地收纳：在视频所在目录下建立以番号命名的子文件夹，并把视频（及同名外挂字幕）移入。
-// 已位于收纳文件夹内时直接返回原路径（不套娃）；目标已存在同名视频时抛错以避免覆盖。
-export function organizeVideo(
-  videoFilePath: string,
-  number: string,
-  mode: FolderNamingMode,
-  data: Pick<ScrapedMetadata, 'title' | 'actors'>,
-  options: OrganizeOptions = {}
-): OrganizeResult {
-  if (isInsideOrganizedFolder(videoFilePath, number)) {
-    return {
-      videoPath: videoFilePath,
-      folderPath: path.dirname(videoFilePath),
-      moved: false,
-      movedSidecars: []
+function safeMoveOver(src: string, dest: string): void {
+  if (fs.existsSync(dest)) {
+    // 目标已存在，且与源不是同一文件 -> 拒绝覆盖，避免吞掉已有资源
+    const srcReal = fs.realpathSync(src)
+    const destReal = fs.realpathSync(dest)
+    if (srcReal !== destReal) {
+      throw new Error(`目标已存在同名文件：${dest}`)
     }
+    return
   }
-
-  const parentDir = path.dirname(videoFilePath)
-  const folderName = buildFolderName(mode, number, data)
-  const folderPath = path.join(parentDir, folderName)
-  fs.mkdirSync(folderPath, { recursive: true })
-
-  const fileName = path.basename(videoFilePath)
-  const destPath = path.join(folderPath, fileName)
-
-  if (fs.existsSync(destPath)) {
-    throw new Error(`收纳目标已存在同名文件：${destPath}`)
-  }
-
-  moveFile(videoFilePath, destPath)
-
-  const movedSidecars: string[] = []
-  if (options.followSubtitles) {
-    const baseName = path.basename(videoFilePath, path.extname(videoFilePath))
-    for (const sidecar of findSidecars(parentDir, baseName)) {
-      const sidecarDest = path.join(folderPath, path.basename(sidecar))
-      if (!fs.existsSync(sidecarDest)) {
-        moveFile(sidecar, sidecarDest)
-        movedSidecars.push(sidecarDest)
-      }
-    }
-  }
-
-  return { videoPath: destPath, folderPath, moved: true, movedSidecars }
-}
-
-function findSidecars(dir: string, baseName: string): string[] {
-  let entries: fs.Dirent[]
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  const result: string[] = []
-  for (const ent of entries) {
-    if (!ent.isFile()) continue
-    const ext = path.extname(ent.name).toLowerCase()
-    if (!SUBTITLE_EXTS.has(ext)) continue
-    const sidecarBase = path.basename(ent.name, ext)
-    // 匹配 foo.srt 与 foo.zh.srt 这类语言后缀
-    if (sidecarBase === baseName || sidecarBase.startsWith(`${baseName}.`)) {
-      result.push(path.join(dir, ent.name))
-    }
-  }
-  return result
-}
-
-function moveFile(src: string, dest: string): void {
   try {
     fs.renameSync(src, dest)
   } catch (err) {
-    // EXDEV：跨设备/跨卷不能 rename，退化为复制后删除原文件
-    if (isCrossDevice(err)) {
+    if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+      // 跨卷：回退拷贝后删除
       fs.copyFileSync(src, dest)
       fs.unlinkSync(src)
     } else {
@@ -98,6 +43,71 @@ function moveFile(src: string, dest: string): void {
   }
 }
 
-function isCrossDevice(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'EXDEV'
+export function organizeVideo(
+  filePath: string,
+  number: string,
+  folderNaming: FolderNamingMode,
+  meta: Pick<ScrapedMetadata, 'title' | 'actors'>,
+  options: OrganizeOptions = {}
+): OrganizeResult {
+  const followSubtitles = options.followSubtitles ?? false
+  const originalDir = path.dirname(filePath)
+  const targetRoot = options.targetRootDir
+    ? path.resolve(options.targetRootDir)
+    : originalDir
+
+  const folderName = buildFolderName(folderNaming, number, meta)
+  const folderPath = path.join(targetRoot, folderName)
+
+  // 已在以该番号命名的收纳文件夹内时，不重复搬移、不再套娃，直接复用现有目录
+  const alreadyOrganized =
+    path.resolve(originalDir) === path.resolve(targetRoot) &&
+    isInsideOrganizedFolder(filePath, number)
+  const effectiveFolder = alreadyOrganized ? originalDir : folderPath
+
+  if (!fs.existsSync(effectiveFolder)) {
+    fs.mkdirSync(effectiveFolder, { recursive: true })
+  }
+
+  const sidecarDir = path.join(effectiveFolder, 'extrafanart')
+
+  const ext = path.extname(filePath)
+  const targetVideoPath = alreadyOrganized
+    ? filePath
+    : path.join(effectiveFolder, `${number}${ext}`)
+
+  let moved = false
+  if (path.resolve(filePath) !== path.resolve(targetVideoPath)) {
+    if (!fs.existsSync(targetVideoPath)) {
+      safeMoveOver(filePath, targetVideoPath)
+      moved = true
+    } else {
+      throw new Error(`目标已存在同名文件：${targetVideoPath}`)
+    }
+  }
+
+  // 字幕跟随：从「视频原所在目录」搬入收纳目录
+  const movedSidecars: string[] = []
+  if (followSubtitles && moved && !alreadyOrganized) {
+    const candidates = fs
+      .readdirSync(originalDir)
+      .filter((f) => isSubtitleFile(f))
+      .filter((f) => f.startsWith(path.basename(filePath, ext)))
+    for (const f of candidates) {
+      const src = path.join(originalDir, f)
+      const dst = path.join(effectiveFolder, f)
+      if (!fs.existsSync(dst)) {
+        safeMoveOver(src, dst)
+        movedSidecars.push(dst)
+      }
+    }
+  }
+
+  return {
+    moved,
+    folderPath: effectiveFolder,
+    videoPath: targetVideoPath,
+    sidecarDir,
+    movedSidecars
+  }
 }

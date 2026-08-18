@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
   SITE_IDS,
+  CROP_MODES,
+  FOLDER_NAMING_MODES,
+  ORGANIZE_MODES,
   type CropMode,
   type FolderNamingMode,
+  type OrganizeMode,
   type Settings
 } from '../../../shared/types/settings'
 
@@ -18,8 +22,14 @@ const CROP_LABELS: Record<CropMode, string> = {
   full: '完整封面'
 }
 
-const FOLDER_NAMING_MODES: FolderNamingMode[] = ['number', 'numberTitle', 'numberActorTitle']
-const CROP_MODES: CropMode[] = ['right', 'center', 'full']
+const ORGANIZE_LABELS: Record<OrganizeMode, string> = {
+  inPlace: '就地收纳（视频所在目录）',
+  central: '统一收纳到指定目录'
+}
+
+const SITE_SUFFIX: Partial<Record<(typeof SITE_IDS)[number], string>> = {
+  DMM: '图片 CDN'
+}
 
 export default function SettingsPage() {
   const api = window.neoavdc
@@ -65,7 +75,7 @@ export default function SettingsPage() {
     commit({ enabledSites: next })
   }
 
-  const commitText = (key: 'proxyUrl', value: string): void => {
+  const commitText = (key: 'proxyUrl' | 'centralLibraryDir', value: string): void => {
     setSettings((prev) => (prev ? { ...prev, [key]: value } : prev))
   }
 
@@ -78,7 +88,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="settings-note">
-          刮削源、代理与命名规则已可保存；刮削执行逻辑仍在占位，阶段 1 后续接通真实抓取。
+          抓取顺序：按勾选顺序回退，前一个站 404 / 无结果时自动尝试下一个。配置持久化到本地，立即生效。
         </div>
 
         <div className="set-grid">
@@ -87,7 +97,9 @@ export default function SettingsPage() {
             <div className="set-row">
               <div>
                 <div className="label">启用站点</div>
-                <span className="hint">按顺序尝试，失败自动换下一个</span>
+                <span className="hint">
+                  元数据按顺序回退；DMM 仅作图片 CDN，在其他源取不到封面/样张时兜底
+                </span>
               </div>
               <div className="set-control">
                 <div className="checks">
@@ -96,8 +108,10 @@ export default function SettingsPage() {
                       key={s}
                       className={`check-chip ${settings.enabledSites.includes(s) ? 'on' : ''}`}
                       onClick={() => toggleSite(s)}
+                      title={SITE_SUFFIX[s] ? `${s} ${SITE_SUFFIX[s]}` : undefined}
                     >
                       {s}
+                      {SITE_SUFFIX[s] ? <span className="chip-suffix">{SITE_SUFFIX[s]}</span> : null}
                     </span>
                   ))}
                 </div>
@@ -132,7 +146,6 @@ export default function SettingsPage() {
                   onChange={(e) =>
                     commit({ requestIntervalSec: Math.max(0, Number(e.target.value) || 0) })
                   }
-                  style={{ width: 120 }}
                 />
               </div>
             </div>
@@ -160,6 +173,60 @@ export default function SettingsPage() {
                 </select>
               </div>
             </div>
+            <div className="set-row">
+              <div>
+                <div className="label">收纳方式</div>
+                <span className="hint">刮削成功后视频与产物的存放位置</span>
+              </div>
+              <div className="set-control fill">
+                <select
+                  value={settings.organizeMode}
+                  onChange={(e) =>
+                    commit({ organizeMode: e.target.value as OrganizeMode })
+                  }
+                >
+                  {ORGANIZE_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {ORGANIZE_LABELS[mode]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {settings.organizeMode === 'central' && (
+              <div className="set-row">
+                <div>
+                  <div className="label">统一收纳目录</div>
+                  <span className="hint">每个番号在该目录下建独立子文件夹；留空时任务会失败</span>
+                </div>
+                <div className="set-control fill">
+                  <div className="path-input-row">
+                    <input
+                      type="text"
+                      value={settings.centralLibraryDir}
+                      onChange={(e) =>
+                        commitText('centralLibraryDir', e.target.value)
+                      }
+                      onBlur={() =>
+                        commit({ centralLibraryDir: settings.centralLibraryDir })
+                      }
+                      placeholder="选择或粘贴统一资料库根目录"
+                    />
+                    <button
+                      className="btn"
+                      onClick={async () => {
+                        const picked = await api.selectFolder()
+                        if (picked && picked.length > 0) {
+                          commit({ centralLibraryDir: picked[0] })
+                        }
+                      }}
+                    >
+                      选择…
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="set-row">
               <div>
                 <div className="label">海报裁切模式</div>

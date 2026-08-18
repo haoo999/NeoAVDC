@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useImageSource } from '../useImageSource'
 import type { CropMode, Task } from '../../../shared/types'
 import { STATUS_META, fmtTime } from '../status'
@@ -7,6 +8,7 @@ interface DetailPanelProps {
   cropMode: CropMode
   onClose: () => void
   onRetry: (id: string) => void
+  onRescrape: (id: string, number: string) => void
   running: boolean
 }
 
@@ -18,19 +20,46 @@ function coverObjectPosition(crop: CropMode): string {
   return 'center center'
 }
 
-export default function DetailPanel({ task, cropMode, onClose, onRetry, running }: DetailPanelProps) {
+export default function DetailPanel({ task, cropMode, onClose, onRetry, onRescrape, running }: DetailPanelProps) {
   const m = task.metadata
   const posterSrc = useImageSource(task.posterUrl)
   const coverSrc = useImageSource(task.coverUrl)
-  // 本地海报已是 2:3 裁切好的成品，优先用；远程封面需要按设置在框内对齐
+  // Heyzo / FC2 / 欧美片的 fanart 不做裁切（与落盘一致）；其余源沿用用户 cropMode
+  const effectiveCrop: CropMode = m?.posterNoCrop ? 'full' : cropMode
+  // 本地海报已是成品，优先用；远程封面在框内按 effectiveCrop 对齐
   const showingLocalPoster = Boolean(posterSrc)
   const imgSrc = posterSrc ?? coverSrc
   const imgStyle = showingLocalPoster
     ? undefined
     : {
-        objectFit: cropMode === 'full' ? ('contain' as const) : ('cover' as const),
-        objectPosition: coverObjectPosition(cropMode)
+        objectFit: effectiveCrop === 'full' ? ('contain' as const) : ('cover' as const),
+        objectPosition: coverObjectPosition(effectiveCrop)
       }
+  // 手动改番号：内联输入框
+  const [editingNumber, setEditingNumber] = useState(false)
+  const [draftNumber, setDraftNumber] = useState('')
+  const busy =
+    running ||
+    task.status === 'scraping' ||
+    task.status === 'downloading' ||
+    task.status === 'queued'
+  const startEditNumber = () => {
+    setDraftNumber(task.number ?? '')
+    setEditingNumber(true)
+  }
+  const cancelEditNumber = () => {
+    setEditingNumber(false)
+    setDraftNumber('')
+  }
+  const submitEditNumber = () => {
+    const next = draftNumber.trim()
+    if (!next || next === task.number) {
+      cancelEditNumber()
+      return
+    }
+    setEditingNumber(false)
+    onRescrape(task.id, next)
+  }
   return (
     <aside className="detail">
       <div className="detail-head">
@@ -62,7 +91,50 @@ export default function DetailPanel({ task, cropMode, onClose, onRetry, running 
 
       <dl className="detail-grid">
         <dt>番号</dt>
-        <dd className="mono">{task.number ?? '—'}</dd>
+        <dd className="mono">
+          {editingNumber ? (
+            <span className="number-edit">
+              <input
+                autoFocus
+                className="number-edit-input"
+                value={draftNumber}
+                disabled={busy}
+                onChange={e => setDraftNumber(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') submitEditNumber()
+                  else if (e.key === 'Escape') cancelEditNumber()
+                }}
+                placeholder="输入番号，如 SSIS-001"
+              />
+              <button
+                className="btn clay number-edit-ok"
+                disabled={busy || !draftNumber.trim()}
+                onClick={submitEditNumber}
+              >
+                确定
+              </button>
+              <button className="btn ghost number-edit-cancel" disabled={busy} onClick={cancelEditNumber}>
+                取消
+              </button>
+            </span>
+          ) : (
+            <span className="number-value">
+              <span className="number-value-text">{task.number ?? '—'}</span>
+              {task.numberFromManual && <span className="manual-badge" title="已由用户手动指定番号">手动</span>}
+              <button
+                className="icon-btn number-edit-trigger"
+                disabled={busy}
+                onClick={startEditNumber}
+                title="手动修正番号后重新刮削"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            </span>
+          )}
+        </dd>
         <dt>站点</dt>
         <dd className="mono">{task.website ?? '—'}</dd>
         {m && (
@@ -102,13 +174,7 @@ export default function DetailPanel({ task, cropMode, onClose, onRetry, running 
       <div className="detail-actions">
         <button
           className="btn ghost"
-          disabled={
-            running ||
-            task.status === 'scraping' ||
-            task.status === 'downloading' ||
-            task.status === 'queued' ||
-            task.status === 'skipped'
-          }
+          disabled={busy || task.status === 'skipped'}
           onClick={() => onRetry(task.id)}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,8 +183,6 @@ export default function DetailPanel({ task, cropMode, onClose, onRetry, running 
           </svg>
           重新刮削
         </button>
-        <button className="btn ghost" disabled title="阶段 3 实现">换网站重刮</button>
-        <button className="btn ghost" disabled title="阶段 3 实现">手动改番号</button>
       </div>
 
       {task.outputDir && (

@@ -1,6 +1,10 @@
 import { HttpClient } from '../net/httpClient'
 import type { SiteId } from '../../shared/types'
 import { JavBusSource } from './javbus/JavBusSource'
+import { JavDbSource } from './javdb/JavDbSource'
+import { Jav321Source } from './jav321/Jav321Source'
+import { HeyzoSource } from './heyzo/HeyzoSource'
+import { Fc2Source } from './fc2/Fc2Source'
 import type { ScrapeSource } from './types'
 
 export interface ScraperConfig {
@@ -17,10 +21,18 @@ export function createHttpClient(config: ScraperConfig): HttpClient {
   })
 }
 
+// DMM 只作为图片 CDN 兜底（见 media/dmmCdn.ts），不是元数据源，这里不注册。
+//
+// 顺序很关键：HEYZO / FC2 是专用源，对不匹配的番号零网络开销直接 not_found，
+// 放在最前可以让 Heyzo/FC2 番号优先命中官方源，而不是被 JavBus/JavDB 的二次搜索兜底。
 export function createSources(siteIds: SiteId[]): ScrapeSource[] {
   const sources: ScrapeSource[] = []
   for (const id of siteIds) {
-    if (id === 'JavBus') sources.push(new JavBusSource())
+    if (id === 'Heyzo') sources.push(new HeyzoSource())
+    else if (id === 'FC2') sources.push(new Fc2Source())
+    else if (id === 'JavBus') sources.push(new JavBusSource())
+    else if (id === 'JavDB') sources.push(new JavDbSource())
+    else if (id === 'Jav321') sources.push(new Jav321Source())
   }
   return sources
 }

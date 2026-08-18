@@ -1,9 +1,11 @@
 import {
   CROP_MODES,
   FOLDER_NAMING_MODES,
+  ORGANIZE_MODES,
   SITE_IDS,
   type CropMode,
   type FolderNamingMode,
+  type OrganizeMode,
   type Settings,
   type SiteId
 } from '../../shared/types/settings'
@@ -12,6 +14,7 @@ import { DEFAULT_SETTINGS } from '../../shared/settings'
 const SITE_SET = new Set<string>(SITE_IDS)
 const NAMING_SET = new Set<string>(FOLDER_NAMING_MODES)
 const CROP_SET = new Set<string>(CROP_MODES)
+const ORGANIZE_SET = new Set<string>(ORGANIZE_MODES)
 
 function asSiteArray(value: unknown): SiteId[] {
   if (!Array.isArray(value)) return DEFAULT_SETTINGS.enabledSites
@@ -31,6 +34,12 @@ function asCropMode(value: unknown): CropMode {
   return typeof value === 'string' && CROP_SET.has(value)
     ? (value as CropMode)
     : DEFAULT_SETTINGS.cropMode
+}
+
+function asOrganizeMode(value: unknown): OrganizeMode {
+  return typeof value === 'string' && ORGANIZE_SET.has(value)
+    ? (value as OrganizeMode)
+    : DEFAULT_SETTINGS.organizeMode
 }
 
 function asNonEmptyString(value: unknown): string {
@@ -56,6 +65,8 @@ export function sanitizeSettings(input: unknown): Settings {
     proxyUrl: asNonEmptyString(raw['proxyUrl']),
     requestIntervalSec: asInterval(raw['requestIntervalSec']),
     folderNaming: asFolderNaming(raw['folderNaming']),
+    organizeMode: asOrganizeMode(raw['organizeMode']),
+    centralLibraryDir: asNonEmptyString(raw['centralLibraryDir']).trim(),
     cropMode: asCropMode(raw['cropMode']),
     followSubtitles: asBool(raw['followSubtitles'], DEFAULT_SETTINGS.followSubtitles),
     removeWatermark: asBool(raw['removeWatermark'], DEFAULT_SETTINGS.removeWatermark),

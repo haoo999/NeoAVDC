@@ -1,11 +1,16 @@
 import type { EngineEvent } from './engine'
 import type { Settings } from './settings'
 
+export interface RescrapeOptions {
+  number?: string
+}
+
 export interface NeoApi {
   addPaths(paths: string[]): Promise<number>
   startAll(): Promise<void>
   retryTask(id: string): Promise<void>
   retryFailed(): Promise<void>
+  rescrapeTask(id: string, options?: RescrapeOptions): Promise<void>
   removeTask(id: string): Promise<void>
   clearFinished(): Promise<void>
   selectFiles(): Promise<string[]>

@@ -15,6 +15,11 @@ export interface TaskMetadata {
   publisher: string
   series: string
   tags: string[]
+  /**
+   * 海报不裁切：Heyzo/FC2/欧美片的 fanart 本身就是成品封面，
+   * 详情预览与落盘都跳过 2:3 裁切。
+   */
+  posterNoCrop?: boolean
 }
 
 export interface Task {
@@ -24,6 +29,7 @@ export interface Task {
   sizeMB: number
   status: TaskStatus
   number: string | null
+  numberFromManual?: boolean
   title: string | null
   website: string | null
   error: string | null

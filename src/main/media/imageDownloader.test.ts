@@ -60,7 +60,10 @@ const baseOpts = {
   downloadActorAvatars: true,
   downloadSamples: true,
   cropMode: 'full' as const,
-  removeWatermark: false
+  removeWatermark: false,
+  number: 'SSIS-001',
+  parsed: null,
+  dmmEnabled: false
 }
 
 test('chooseExtension 按 magic bytes 识别格式', () => {
@@ -101,6 +104,28 @@ test('downloadImages 关闭选项时不下载样张与演员头像', async () =>
   assert.equal(result.actors.length, 0)
 })
 
+test('downloadImages 演员头像已存在时跳过重复下载并复用', async () => {
+  const video = tmpVideo()
+  const d = data()
+  // 预先写入一个同名（不同扩展名 .jpg）头像，模拟历史已下载
+  const preDir = path.join(path.dirname(video), '.actors')
+  fs.mkdirSync(preDir, { recursive: true })
+  const preAvatar = path.join(preDir, '葵.jpg')
+  fs.writeFileSync(preAvatar, await makePng(10, 10))
+
+  let actorRequested = false
+  const bin: BinaryGetter = async (url: string) => {
+    if (url === 'https://img/a.png') {
+      actorRequested = true
+      return { buffer: await makePng(120, 120), ext: '.png' }
+    }
+    return { buffer: await makeJpeg(200, 300), ext: '.jpg' }
+  }
+  const result = await downloadImages(bin, video, d, baseOpts)
+  assert.equal(actorRequested, false, '已存在头像不应再次请求')
+  assert.deepEqual(result.actors, [preAvatar])
+})
+
 test('downloadImages 单个图片下载失败不影响其余图片', async () => {
   const video = tmpVideo()
   const bin = fakeGetter({
@@ -122,4 +147,22 @@ test('downloadImages 高清封面失败回退缩略图', async () => {
   const result = await downloadImages(bin, video, d, { ...baseOpts, downloadHdCover: true })
   assert.ok(result.poster)
   assert.ok(fs.existsSync(result.poster!))
+})
+
+test('downloadImages 元数据源封面失败时回退 DMM CDN', async () => {
+  const video = tmpVideo()
+  const cover = await makeJpeg(200, 300)
+  // 元数据源封面/样张都没有；DMM 5 位 padding 命中
+  const bin = fakeGetter({
+    'https://pics.dmm.co.jp/digital/video/ssis00001/ssis00001pl.jpg': cover,
+    'https://pics.dmm.co.jp/digital/video/ssis00001/ssis00001jp-1.jpg': await makeJpeg(400, 225)
+  })
+  const d = data('https://img/missing.jpg')
+  d.sampleUrls = []
+  const result = await downloadImages(bin, video, d, {
+    ...baseOpts,
+    dmmEnabled: true
+  })
+  assert.ok(result.poster)
+  assert.ok(result.samples.length >= 1)
 })

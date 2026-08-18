@@ -54,6 +54,48 @@ test('organizeVideo 目标已存在同名文件时抛错且不移动', () => {
   assert.ok(fs.existsSync(video))
 })
 
+test('organizeVideo 统一收纳时视频移入指定根目录下的番号文件夹', () => {
+  const incoming = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
+  const library = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
+  const video = path.join(incoming, 'MIDE-333.mp4')
+  fs.writeFileSync(video, 'video')
+
+  const result = organizeVideo(
+    video,
+    'MIDE-333',
+    'number',
+    { title: 'Central Title', actors: [] },
+    { targetRootDir: library }
+  )
+
+  assert.equal(result.moved, true)
+  assert.equal(result.folderPath, path.join(library, 'MIDE-333'))
+  assert.equal(result.videoPath, path.join(library, 'MIDE-333', 'MIDE-333.mp4'))
+  assert.ok(fs.existsSync(result.videoPath))
+  assert.ok(!fs.existsSync(video))
+})
+
+test('organizeVideo 统一收纳时同名字幕跟随移入', () => {
+  const incoming = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
+  const library = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
+  const video = path.join(incoming, 'MIDE-444.mp4')
+  const srt = path.join(incoming, 'MIDE-444.srt')
+  fs.writeFileSync(video, 'video')
+  fs.writeFileSync(srt, 'sub')
+
+  const result = organizeVideo(
+    video,
+    'MIDE-444',
+    'number',
+    { title: 'T', actors: [] },
+    { targetRootDir: library, followSubtitles: true }
+  )
+
+  assert.ok(fs.existsSync(path.join(result.folderPath, 'MIDE-444.mp4')))
+  assert.ok(fs.existsSync(path.join(result.folderPath, 'MIDE-444.srt')))
+  assert.ok(!fs.existsSync(srt))
+})
+
 test('organizeVideo 跟随同名字幕（含语言后缀）', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
   const video = path.join(dir, 'SSIS-001.mp4')

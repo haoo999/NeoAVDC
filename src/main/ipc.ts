@@ -12,6 +12,11 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
 
   ipcMain.handle(IPC.ENGINE_RETRY_FAILED, () => engine.retryFailed())
 
+  ipcMain.handle(
+    IPC.ENGINE_RESCRAPE,
+    (_e, id: string, options?: { number?: string }) => engine.rescrapeTask(id, options ?? {})
+  )
+
   ipcMain.handle(IPC.ENGINE_REMOVE_TASK, (_e, id: string) => engine.removeTask(id))
 
   ipcMain.handle(IPC.ENGINE_CLEAR_FINISHED, () => engine.clearFinished())
@@ -49,6 +54,7 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
       IPC.ENGINE_START_ALL,
       IPC.ENGINE_RETRY_TASK,
       IPC.ENGINE_RETRY_FAILED,
+      IPC.ENGINE_RESCRAPE,
       IPC.ENGINE_REMOVE_TASK,
       IPC.ENGINE_CLEAR_FINISHED,
       IPC.DIALOG_SELECT_FILES,

@@ -14,6 +14,7 @@ export interface HttpResponse {
   status: number
   headers: Record<string, string>
   body: Buffer
+  finalUrl?: string
 }
 
 export interface HttpRequestOptions {
@@ -22,6 +23,9 @@ export interface HttpRequestOptions {
   cookies?: Record<string, string>
   timeoutMs?: number
   responseEncoding?: BufferEncoding
+  body?: string
+  followRedirect?: boolean
+  maxRedirects?: number
 }
 
 export interface HttpClientConfig {
@@ -45,6 +49,7 @@ export interface TransportOptions {
   headers: Record<string, string>
   timeoutMs: number
   proxyUrl: string
+  body?: string
 }
 
 export class HttpError extends Error {
@@ -168,6 +173,15 @@ export function nodeTransport(
       reject(new HttpError(url, null, err.message, err))
     }
 
+    const finalizeReq = (r: http.ClientRequest): void => {
+      r.on('error', onError)
+      r.setTimeout(options.timeoutMs, () => {
+        r.destroy(new Error('请求超时'))
+      })
+      if (options.body) r.write(options.body)
+      r.end()
+    }
+
     if (proxy && isHttps) {
       const connectReq = http.request({
         host: proxy.hostname,
@@ -200,11 +214,7 @@ export function nodeTransport(
           },
           (res) => collectResponse(res, resolve, reject, url)
         )
-        req.on('error', onError)
-        req.setTimeout(options.timeoutMs, () => {
-          req.destroy(new Error('请求超时'))
-        })
-        req.end()
+        finalizeReq(req)
       })
       connectReq.on('error', onError)
       connectReq.setTimeout(options.timeoutMs, () => {
@@ -230,11 +240,7 @@ export function nodeTransport(
 
     const lib = isHttps ? https : http
     req = lib.request(reqOptions, (res) => collectResponse(res, resolve, reject, url))
-    req.on('error', onError)
-    req.setTimeout(options.timeoutMs, () => {
-      req.destroy(new Error('请求超时'))
-    })
-    req.end()
+    finalizeReq(req)
   })
 }
 
@@ -252,15 +258,13 @@ function collectResponse(
       rawHeaders[res.rawHeaders[i].toLowerCase()] = res.rawHeaders[i + 1]
     }
     const body = Buffer.concat(chunks)
-    if ((res.statusCode ?? 0) >= 400) {
-      reject(new HttpError(url, res.statusCode ?? null, `HTTP ${res.statusCode}`))
+    const status = res.statusCode ?? 0
+    // 3xx 重定向交由上层 followRedirect 处理，不当作错误
+    if (status >= 400) {
+      reject(new HttpError(url, status, `HTTP ${status}`))
       return
     }
-    resolve({
-      status: res.statusCode ?? 0,
-      headers: rawHeaders,
-      body
-    })
+    resolve({ status, headers: rawHeaders, body })
   })
   res.on('error', (err) => {
     reject(new HttpError(url, res.statusCode ?? null, err.message, err))
@@ -299,12 +303,37 @@ export class HttpClient {
     return this.request('GET', url, options)
   }
 
+  async post(
+    url: string,
+    options: HttpRequestOptions = {}
+  ): Promise<HttpResponse> {
+    return this.request('POST', url, options)
+  }
+
+  async postText(
+    url: string,
+    options: HttpRequestOptions = {}
+  ): Promise<{ status: number; headers: Record<string, string>; text: string; finalUrl: string }> {
+    const res = await this.post(url, options)
+    return {
+      status: res.status,
+      headers: res.headers,
+      text: bodyToText(res.body, res.headers),
+      finalUrl: res.finalUrl ?? url
+    }
+  }
+
   async getText(
     url: string,
     options: HttpRequestOptions = {}
-  ): Promise<{ status: number; headers: Record<string, string>; text: string }> {
+  ): Promise<{ status: number; headers: Record<string, string>; text: string; finalUrl: string }> {
     const res = await this.get(url, options)
-    return { status: res.status, headers: res.headers, text: bodyToText(res.body, res.headers) }
+    return {
+      status: res.status,
+      headers: res.headers,
+      text: bodyToText(res.body, res.headers),
+      finalUrl: res.finalUrl ?? url
+    }
   }
 
   async getBuffer(
@@ -324,6 +353,43 @@ export class HttpClient {
     url: string,
     options: HttpRequestOptions
   ): Promise<HttpResponse> {
+    const followRedirect = options.followRedirect ?? false
+    const maxRedirects = options.maxRedirects ?? 5
+    let currentMethod = method
+    let currentUrl = url
+    let currentOptions: HttpRequestOptions = options
+    let redirects = 0
+
+    while (true) {
+      const res = await this.requestOnce(currentMethod, currentUrl, currentOptions)
+      if (
+        followRedirect &&
+        res.status >= 300 &&
+        res.status < 400 &&
+        res.headers.location &&
+        redirects < maxRedirects
+      ) {
+        const nextUrl = new URL(res.headers.location, currentUrl).toString()
+        // 重定向响应 body 已被 collect 为 Buffer，无需手动释放
+        redirects++
+        // POST 收到 301/302/303 时按规范降级为 GET
+        if (currentMethod === 'POST' && [301, 302, 303].includes(res.status)) {
+          currentMethod = 'GET'
+          const { body: _body, ...rest } = currentOptions
+          currentOptions = rest
+        }
+        currentUrl = nextUrl
+        continue
+      }
+      return { ...res, finalUrl: currentUrl }
+    }
+  }
+
+  private async requestOnce(
+    method: 'GET' | 'POST',
+    url: string,
+    options: HttpRequestOptions
+  ): Promise<HttpResponse> {
     const target = new URL(url)
     const origin = `${target.protocol}//${target.host}`
     const baseHeaders: Record<string, string> = {
@@ -338,6 +404,13 @@ export class HttpClient {
     }
     const cookie = cookieHeader(options.cookies)
     if (cookie) baseHeaders['cookie'] = cookie
+    if (options.body) {
+      baseHeaders['content-type'] =
+        options.headers?.['Content-Type'] ??
+        options.headers?.['content-type'] ??
+        'application/x-www-form-urlencoded'
+      baseHeaders['content-length'] = Buffer.byteLength(options.body).toString()
+    }
 
     const headers = mergeHeaders(baseHeaders, options.headers)
     const timeoutMs = options.timeoutMs ?? this.timeoutMs
@@ -350,7 +423,8 @@ export class HttpClient {
           method,
           headers,
           timeoutMs,
-          proxyUrl: this.proxyUrl
+          proxyUrl: this.proxyUrl,
+          body: options.body
         })
       } catch (err) {
         lastError = err

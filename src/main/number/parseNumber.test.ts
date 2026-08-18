@@ -142,6 +142,79 @@ describe('parseNumberFromFileName', () => {
     const r = parseNumberFromFileName('readme.txt')
     assert.equal(r, null)
   })
+
+  it('识别无分隔符番号 SSIS001', () => {
+    const r = parseNumberFromFileName('SSIS001.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'SSIS-001')
+    assert.equal(r.isCensored, true)
+  })
+
+  it('识别小写无分隔符番号 ssis001', () => {
+    const r = parseNumberFromFileName('ssis001.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'SSIS-001')
+  })
+
+  it('无分隔符番号不足三位补零 AB12 -> AB-012', () => {
+    const r = parseNumberFromFileName('AB12.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'AB-012')
+  })
+
+  it('剥离发布组方括号与中文标题 [Thz.la]SSIS-123 标题', () => {
+    const r = parseNumberFromFileName('[Thz.la]SSIS-123 某中文标题.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'SSIS-123')
+  })
+
+  it('剥离 -UC / 流出 后缀', () => {
+    const r = parseNumberFromFileName('IPX-888-UC.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'IPX-888')
+  })
+
+  it('剥离无码流出与无修正后缀', () => {
+    const r = parseNumberFromFileName('SSIS-456_无码流出.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'SSIS-456')
+  })
+
+  it('剥离 FHD 高画质后缀', () => {
+    const r = parseNumberFromFileName('MIDE-700FHD高畫質.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'MIDE-700')
+  })
+
+  it('番号前后有中文标签仍可识别', () => {
+    const r = parseNumberFromFileName('【最新作品】SSNI-111-c.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'SSNI-111')
+    assert.equal(r.hasSubtitleMark, true)
+  })
+
+  it('多 token 文件名中定位番号', () => {
+    const r = parseNumberFromFileName('Some Prefix Group JUL-999 Title FHD.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'JUL-999')
+  })
+
+  it('下划线分隔的 FC2 也能识别', () => {
+    const r = parseNumberFromFileName('fc2_ppv_3333333.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'FC2-PPV-3333333')
+  })
+
+  it('四位及以上数字番号不补零', () => {
+    const r = parseNumberFromFileName('ABP-1234.mp4')
+    assert.ok(r)
+    assert.equal(r.number, 'ABP-1234')
+  })
+
+  it('普通英文单词不被误判为番号', () => {
+    assert.equal(parseNumberFromFileName('Vacation 2024.mp4'), null)
+    assert.equal(parseNumberFromFileName('README FIRST.txt'), null)
+  })
 })
 
 describe('isVideoFile / isSubtitleFile', () => {

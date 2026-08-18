@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ScrapedMetadata, Settings } from '../../shared/types'
 import type { HttpClient } from '../net/httpClient'
+import type { ParsedName } from '../number/parseNumber'
+import { DMM_SITE_ID } from './dmmCdn'
 import { buildMediaPaths } from './fileNames'
 import {
   createBinaryGetter,
@@ -60,6 +62,7 @@ export async function writeMediaAssets(
   http: Pick<HttpClient, 'getBuffer'>,
   videoFilePath: string,
   data: ScrapedMetadata,
+  parsed: ParsedName | null,
   settings: Settings,
   onProgress?: ProgressCallback
 ): Promise<MediaWriteSummary> {
@@ -88,6 +91,9 @@ export async function writeMediaAssets(
     downloadSamples: settings.downloadSamples,
     cropMode: settings.cropMode,
     removeWatermark: settings.removeWatermark,
+    number: data.number,
+    parsed,
+    dmmEnabled: settings.enabledSites.includes(DMM_SITE_ID),
     onProgress
   })
 

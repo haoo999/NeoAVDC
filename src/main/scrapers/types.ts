@@ -3,7 +3,7 @@ import type { ParsedName } from '../number/parseNumber'
 import type { ScrapeOutcome } from '../../shared/types'
 
 export interface ScrapeContext {
-  http: Pick<HttpClient, 'getText'>
+  http: Pick<HttpClient, 'getText' | 'getBuffer' | 'postText' | 'post'>
 }
 
 export interface ScrapeSource {

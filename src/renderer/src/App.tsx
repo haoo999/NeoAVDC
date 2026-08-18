@@ -187,6 +187,7 @@ export default function App() {
                 cropMode={cropMode}
                 running={progress.running}
                 onRetry={(id) => void api?.retryTask(id)}
+                onRescrape={(id, number) => void api?.rescrapeTask(id, { number })}
                 onClose={() => setSelectedId(null)}
               />
             )}

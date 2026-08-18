@@ -58,6 +58,8 @@ test('Settings 中 generateNfo / skipExistingNfo 字段被正确使用', () => {
     generateNfo: true,
     skipExistingNfo: true,
     folderNaming: 'number',
+    organizeMode: 'inPlace',
+    centralLibraryDir: '',
     cropMode: 'center',
     followSubtitles: false,
     removeWatermark: false

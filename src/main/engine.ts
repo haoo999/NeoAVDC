@@ -121,6 +121,7 @@ export class Engine {
       metadata: null,
       coverUrl: null,
       posterUrl: null,
+      numberFromManual: false,
       addedAt: Date.now()
     })
   }
@@ -177,6 +178,23 @@ export class Engine {
     await this.startAll()
   }
 
+  async rescrapeTask(id: string, options: { number?: string } = {}): Promise<void> {
+    if (this.running) return
+    const task = this.tasks.find((t) => t.id === id)
+    if (!task) return
+
+    const manual = typeof options.number === 'string' ? options.number.trim() : ''
+    if (manual) {
+      task.number = manual
+      task.numberFromManual = true
+      this.log('info', `[${manual}] 用户指定番号重刮`)
+    }
+    task.status = 'queued'
+    task.error = null
+    this.emitTasks()
+    await this.startAll()
+  }
+
   removeTask(id: string): void {
     const idx = this.tasks.findIndex((t) => t.id === id)
     if (idx >= 0) {
@@ -229,8 +247,14 @@ export class Engine {
     this.emitProgress()
     this.log('info', `开始识别：${task.fileName}`)
 
-    const parsed = parseNumberFromFileName(task.fileName)
-    const number = parsed?.number ?? task.fileName
+    // 用户手动指定过番号则不再从文件名重新解析，避免覆盖纠正结果
+    const parsed = task.numberFromManual && task.number
+      ? null
+      : parseNumberFromFileName(task.fileName)
+    const number = parsed?.number ?? task.number ?? task.fileName
+    if (task.numberFromManual) {
+      this.log('info', `使用手动番号：${number}`)
+    }
     task.number = number
     this.emitTasks()
 
@@ -255,12 +279,22 @@ export class Engine {
     this.emitProgress()
     this.log('success', `元数据命中：${number} ${metadata.title}`)
 
-    // 刮削成功后先原地收纳成文件夹，再在新位置写入媒体产物
+    // 统一收纳模式下必须先配置目标根目录，否则前面的抓取都白做
+    if (settings.organizeMode === 'central' && !settings.centralLibraryDir.trim()) {
+      task.status = 'failed'
+      task.error = '未配置统一收纳目录'
+      this.log('error', `[${number}] ${task.error}`)
+      return
+    }
+
+    // 刮削成功后按设置收纳成番号子文件夹，再在新位置写入媒体产物
     let videoPath = task.filePath
     this.log('info', `[${number}] 收纳文件…`)
     try {
       const organized = organizeVideo(task.filePath, number, settings.folderNaming, metadata, {
-        followSubtitles: settings.followSubtitles
+        followSubtitles: settings.followSubtitles,
+        targetRootDir:
+          settings.organizeMode === 'central' ? settings.centralLibraryDir : undefined
       })
       if (organized.moved) {
         videoPath = organized.videoPath
@@ -291,52 +325,59 @@ export class Engine {
     }
 
     try {
-      const summary = await writeMediaAssets(http, videoPath, metadata, settings, (p) => {
-        const prefix = `[${number}]`
-        if (p.done) {
-          // 阶段结束：立即把活动行原位替换为最终结果
-          const ok = (p.count ?? 0) > 0
+      const summary = await writeMediaAssets(
+        http,
+        videoPath,
+        metadata,
+        parsed,
+        settings,
+        (p) => {
+          const prefix = `[${number}]`
+          if (p.done) {
+            // 阶段结束：立即把活动行原位替换为最终结果
+            const ok = (p.count ?? 0) > 0
+            if (p.stage === 'cover') {
+              this.commitActivity(
+                stageKeys.cover,
+                ok ? 'success' : 'warn',
+                ok ? `${prefix} 封面下载完成` : `${prefix} 封面下载失败`
+              )
+            } else if (p.stage === 'sample') {
+              this.commitActivity(
+                stageKeys.sample,
+                ok ? 'success' : 'warn',
+                ok ? `${prefix} 样张下载完成（${p.count} 张）` : `${prefix} 样张下载失败`
+              )
+            } else if (p.stage === 'actor') {
+              this.commitActivity(
+                stageKeys.actor,
+                ok ? 'success' : 'warn',
+                ok
+                  ? `${prefix} 演员头像下载完成（${p.count} 个）`
+                  : `${prefix} 演员头像下载失败`
+              )
+            }
+            return
+          }
           if (p.stage === 'cover') {
-            this.commitActivity(
-              stageKeys.cover,
-              ok ? 'success' : 'warn',
-              ok ? `${prefix} 封面下载完成` : `${prefix} 封面下载失败`
-            )
+            const msg = p.index === 1 ? `${prefix} 下载封面…` : `${prefix} 处理海报…`
+            this.activity(stageKeys.cover, 'info', msg)
           } else if (p.stage === 'sample') {
-            this.commitActivity(
+            this.activity(
               stageKeys.sample,
-              ok ? 'success' : 'warn',
-              ok ? `${prefix} 样张下载完成（${p.count} 张）` : `${prefix} 样张下载失败`
+              'info',
+              `${prefix} 下载样张 ${p.index}/${p.total}…`
             )
           } else if (p.stage === 'actor') {
-            this.commitActivity(
+            const who = p.label ? ` ${p.label}` : ''
+            this.activity(
               stageKeys.actor,
-              ok ? 'success' : 'warn',
-              ok
-                ? `${prefix} 演员头像下载完成（${p.count} 个）`
-                : `${prefix} 演员头像下载失败`
+              'info',
+              `${prefix} 下载演员头像 ${p.index}/${p.total}${who}…`
             )
           }
-          return
         }
-        if (p.stage === 'cover') {
-          const msg = p.index === 1 ? `${prefix} 下载封面…` : `${prefix} 处理海报…`
-          this.activity(stageKeys.cover, 'info', msg)
-        } else if (p.stage === 'sample') {
-          this.activity(
-            stageKeys.sample,
-            'info',
-            `${prefix} 下载样张 ${p.index}/${p.total}…`
-          )
-        } else if (p.stage === 'actor') {
-          const who = p.label ? ` ${p.label}` : ''
-          this.activity(
-            stageKeys.actor,
-            'info',
-            `${prefix} 下载演员头像 ${p.index}/${p.total}${who}…`
-          )
-        }
-      })
+      )
 
       if (summary.skippedNfo) {
         this.log('info', `[${number}] ${summary.notes.join('；')}`)
@@ -398,7 +439,8 @@ export class Engine {
       runtimeMin: data.runtimeMin ?? 0,
       publisher: data.publisher ?? '',
       series: data.series ?? '',
-      tags: [...data.genres]
+      tags: [...data.genres],
+      posterNoCrop: data.posterNoCrop === true
     }
   }
 

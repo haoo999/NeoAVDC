@@ -35,7 +35,16 @@ function fakeCtx(
           const r = routes[url]
           if (!r) throw new HttpError(url, 404, 'HTTP 404')
           if (r.err) throw r.err
-          return { status: r.status ?? 200, headers: {}, text: r.text ?? '' }
+          return { status: r.status ?? 200, headers: {}, text: r.text ?? '', finalUrl: url }
+        },
+        async getBuffer() {
+          throw new Error('JavBus 测试不应调用 getBuffer')
+        },
+        async postText() {
+          throw new Error('JavBus 测试不应调用 postText')
+        },
+        async post() {
+          throw new Error('JavBus 测试不应调用 post')
         }
       }
     }

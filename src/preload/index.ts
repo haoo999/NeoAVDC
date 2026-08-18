@@ -7,6 +7,7 @@ const api: NeoApi = {
   startAll: () => ipcRenderer.invoke(IPC.ENGINE_START_ALL),
   retryTask: (id) => ipcRenderer.invoke(IPC.ENGINE_RETRY_TASK, id),
   retryFailed: () => ipcRenderer.invoke(IPC.ENGINE_RETRY_FAILED),
+  rescrapeTask: (id, options) => ipcRenderer.invoke(IPC.ENGINE_RESCRAPE, id, options),
   removeTask: (id) => ipcRenderer.invoke(IPC.ENGINE_REMOVE_TASK, id),
   clearFinished: () => ipcRenderer.invoke(IPC.ENGINE_CLEAR_FINISHED),
   selectFiles: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FILES),

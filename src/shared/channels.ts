@@ -5,6 +5,7 @@ export const IPC = {
   ENGINE_START_ALL: 'engine:startAll',
   ENGINE_RETRY_TASK: 'engine:retryTask',
   ENGINE_RETRY_FAILED: 'engine:retryFailed',
+  ENGINE_RESCRAPE: 'engine:rescrape',
   ENGINE_REMOVE_TASK: 'engine:removeTask',
   ENGINE_CLEAR_FINISHED: 'engine:clearFinished',
   DIALOG_SELECT_FILES: 'dialog:selectFiles',
