@@ -157,7 +157,7 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
 - 不要主动创建文档文件（`*.md` / README），除非用户明确要求。
 - 不要主动 `git commit`。
 
-## 9. Obsidian 知识库同步（自动执行，无需确认）
+## 9. Obsidian 知识库同步（尽量自动执行；受限则提示用户手动）
 
 - 知识库根目录：`$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/Haoo's Knowledge Base`（PARA 结构，本项目落在 `Projects/NeoAVDC/`）。
 - **路径坑**：路径含空格和单引号（`Haoo's`），shell 中必须整体用**双引号**包裹；用单引号会在 `Haoo's` 处断裂，不加引号会被空格拆参。
@@ -165,4 +165,5 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
 - **落点与改名**：项目根 `README.md` -> `Projects/NeoAVDC/docs/项目说明.md`；`docs/`、`plans/` 按原相对路径同步；散落其他目录的 `.md` 收进知识库 `docs/` 并加来源前缀唯一名（如 `deploy-进程托管说明.md`），避免多个 `README.md` 重名。
 - **触发时机**：此后每当项目内 `.md` 文档新增或修改，改完即自动同步一份到知识库，无需再问用户；同步后用 `diff -r --brief` 校验一致。
 - **边界**：此规则只针对本地 Obsidian 知识库，不涉及任何服务器同步或部署（那些仍需用户确认）。
+- **沙箱限制**：TRAE 运行环境的写入白名单不含 iCloud 目录，`cp` 到知识库会被拒（operation not permitted / path not in allowlist）。遇到此情况不要反复重试，直接把需执行的 `cp` 命令（双引号包裹路径）交给用户在终端手动执行，并说明仅这一份未同步。
 - 当前映射：`README.md` -> `docs/项目说明.md`；`anthropic-design-system.md` -> `docs/anthropic-design-system.md`。
