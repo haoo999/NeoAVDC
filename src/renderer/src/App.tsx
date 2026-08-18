@@ -1,38 +1,110 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { EngineEvent, LogLine, Progress, Task } from '../../shared/types'
+import type { CropMode, EngineEvent, Progress, Settings, Task } from '../../shared/types'
+import { DEFAULT_SETTINGS } from '../../shared/settings'
 import { applyTheme, getInitialTheme, toggleTheme, type Theme } from './theme'
 import TopBar from './components/TopBar'
 import DropZone from './components/DropZone'
 import TaskList from './components/TaskList'
 import DetailPanel from './components/DetailPanel'
-import LogDrawer from './components/LogDrawer'
+import LogDrawer, { type TimelineEntry } from './components/LogDrawer'
 import SettingsPage from './components/SettingsPage'
 import ToolsPage from './components/ToolsPage'
 
 export type Tab = 'tasks' | 'settings' | 'tools'
+
+const MAX_ENTRIES = 400
 
 export default function App() {
   const api = window.neoavdc
   const [tab, setTab] = useState<Tab>('tasks')
   const [theme, setTheme] = useState<Theme>(() => getInitialTheme())
   const [tasks, setTasks] = useState<Task[]>([])
-  const [logs, setLogs] = useState<LogLine[]>([])
+  const [entries, setEntries] = useState<TimelineEntry[]>([])
   const [progress, setProgress] = useState<Progress>({ done: 0, total: 0, running: false })
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [logOpen, setLogOpen] = useState(true)
+  const [logOpen, setLogOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [cropMode, setCropMode] = useState<CropMode>(DEFAULT_SETTINGS.cropMode)
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
 
+  // 读取裁切设置供详情面板预览使用；设置变更后重新拉取
+  useEffect(() => {
+    if (!api) return
+    let cancelled = false
+    void api.getSettings().then((s: Settings) => {
+      if (!cancelled) setCropMode(s.cropMode)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api, tab])
+
   useEffect(() => {
     if (!api) return
     return api.onEngineEvent((ev: EngineEvent) => {
       if (ev.type === 'tasks') setTasks(ev.tasks)
-      else if (ev.type === 'log')
-        setLogs((prev) => (prev.length > 400 ? [...prev.slice(-400), ev.line] : [...prev, ev.line]))
-      else setProgress(ev.progress)
+      else if (ev.type === 'log') {
+        setEntries((prev) => {
+          const next: TimelineEntry[] = [
+            ...prev,
+            {
+              kind: 'log',
+              time: ev.line.time,
+              level: ev.line.level,
+              message: ev.line.message
+            }
+          ]
+          return next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next
+        })
+      } else if (ev.type === 'progress') setProgress(ev.progress)
+      else if (ev.type === 'activity-update') {
+        setEntries((prev) => {
+          const idx = prev.findIndex(
+            (e) => e.kind === 'activity' && e.key === ev.line.key
+          )
+          if (idx >= 0) {
+            const next = prev.slice()
+            const old = next[idx]
+            if (old && old.kind === 'activity') {
+              next[idx] = {
+                ...old,
+                level: ev.line.level,
+                message: ev.line.message
+              }
+            }
+            return next
+          }
+          const next: TimelineEntry[] = [
+            ...prev,
+            {
+              kind: 'activity',
+              key: ev.line.key,
+              startedAt: Date.now(),
+              level: ev.line.level,
+              message: ev.line.message
+            }
+          ]
+          return next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next
+        })
+      } else if (ev.type === 'activity-commit') {
+        setEntries((prev) => {
+          const idx = prev.findIndex(
+            (e) => e.kind === 'activity' && e.key === ev.key
+          )
+          if (idx < 0) return prev
+          const next = prev.slice()
+          next[idx] = {
+            kind: 'log',
+            time: ev.line.time,
+            level: ev.line.level,
+            message: ev.line.message
+          }
+          return next
+        })
+      }
     })
   }, [api])
 
@@ -112,6 +184,7 @@ export default function App() {
             {selected && (
               <DetailPanel
                 task={selected}
+                cropMode={cropMode}
                 running={progress.running}
                 onRetry={(id) => void api?.retryTask(id)}
                 onClose={() => setSelectedId(null)}
@@ -124,9 +197,10 @@ export default function App() {
       </div>
       <LogDrawer
         open={logOpen}
-        logs={logs}
+        entries={entries}
         progress={progress}
         onToggle={() => setLogOpen((v) => !v)}
+        onClear={() => setEntries([])}
       />
       {dragOver && (
         <div className="drop-overlay">

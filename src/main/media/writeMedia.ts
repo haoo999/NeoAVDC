@@ -3,7 +3,12 @@ import path from 'node:path'
 import type { ScrapedMetadata, Settings } from '../../shared/types'
 import type { HttpClient } from '../net/httpClient'
 import { buildMediaPaths } from './fileNames'
-import { createBinaryGetter, downloadImages, fileExists } from './imageDownloader'
+import {
+  createBinaryGetter,
+  downloadImages,
+  fileExists,
+  type ProgressCallback
+} from './imageDownloader'
 import { buildNfoXml } from './nfoWriter'
 
 export interface MediaWriteSummary {
@@ -39,20 +44,37 @@ function baseNameOf(p: string | null): string | undefined {
   return path.basename(p)
 }
 
+const MEDIA_EXTS = ['.jpg', '.jpeg', '.png', '.webp'] as const
+
+// 在 dir 下查找 baseName + suffix + 图片扩展名 的已有文件，返回第一个命中的绝对路径。
+// 海报/样张在不同运行中可能因封面格式不同而扩展名有别，不能硬编码 .jpg。
+function findExistingMedia(dir: string, baseName: string, suffix: string): string | null {
+  for (const ext of MEDIA_EXTS) {
+    const candidate = path.join(dir, `${baseName}${suffix}${ext}`)
+    if (fileExists(candidate)) return candidate
+  }
+  return null
+}
+
 export async function writeMediaAssets(
   http: Pick<HttpClient, 'getBuffer'>,
   videoFilePath: string,
   data: ScrapedMetadata,
-  settings: Settings
+  settings: Settings,
+  onProgress?: ProgressCallback
 ): Promise<MediaWriteSummary> {
   const paths = buildMediaPaths(videoFilePath)
 
   const nfoExists = fileExists(paths.nfoPath)
   if (nfoExists && settings.skipExistingNfo) {
+    // NFO 已存在则跳过下载/写入，但仍需把磁盘上已有的海报路径返回给引擎，
+    // 否则任务详情的预览会丢失 posterUrl，回退到远程横版封面被 CSS 居中裁切。
+    const existingPoster = findExistingMedia(paths.dir, paths.baseName, '-poster')
+    const existingFanart = findExistingMedia(paths.dir, paths.baseName, '-fanart')
     return {
       nfoPath: paths.nfoPath,
-      posterPath: null,
-      fanartPath: null,
+      posterPath: existingPoster,
+      fanartPath: existingFanart,
       sampleCount: 0,
       actorCount: 0,
       skippedNfo: true,
@@ -65,7 +87,8 @@ export async function writeMediaAssets(
     downloadActorAvatars: settings.downloadActorAvatars,
     downloadSamples: settings.downloadSamples,
     cropMode: settings.cropMode,
-    removeWatermark: settings.removeWatermark
+    removeWatermark: settings.removeWatermark,
+    onProgress
   })
 
   let nfoPath: string | null = null

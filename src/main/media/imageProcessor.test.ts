@@ -27,34 +27,35 @@ test('裁切几何：目标高度与是否需要裁切', () => {
   assert.equal(needsCrop(300, 450), false)
 })
 
-test('cropTop 区分 top / center / full', () => {
-  assert.equal(cropTop('top', 600, 450), 0)
+test('cropTop 区分 full / 居中', () => {
   assert.equal(cropTop('full', 600, 450), 0)
   assert.equal(cropTop('center', 600, 450), 75)
+  // right 是横版语义，竖向回退居中
+  assert.equal(cropTop('right', 600, 450), 75)
 })
 
 test('横版全封面：needsCrop / targetPosterWidth / cropLeft', () => {
   // 800x538（JavBus 全封面）：2:3 目标宽 = 538*2/3 ≈ 359，需裁宽
   assert.equal(targetPosterWidth(538), Math.round(538 * POSTER_ASPECT))
   assert.equal(needsCrop(800, 538), true)
+  // right 取右侧正面：800-359 = 441
+  assert.equal(cropLeft('right', 800, 359), 441)
   // center 居中：(800-359)/2 = 221（四舍五入 221）
   assert.equal(cropLeft('center', 800, 359), 221)
-  // top 取右侧正面：800-359 = 441
-  assert.equal(cropLeft('top', 800, 359), 441)
   assert.equal(cropLeft('full', 800, 359), 0)
 })
 
-test('processPoster 把横版全封面 center 裁成 2:3 竖海报', async () => {
+test('processPoster 把横版全封面 right 裁成 2:3 竖海报', async () => {
   const src = await makeImage(800, 538)
-  const out = await processPoster({ buffer: src, crop: 'center', removeWatermark: false })
+  const out = await processPoster({ buffer: src, crop: 'right', removeWatermark: false })
   assert.equal(out.height, 538)
   assert.equal(out.width, targetPosterWidth(538))
   assert.ok(Math.abs(out.height / out.width - 1.5) < 0.02)
 })
 
-test('processPoster 横版 top 模式取右侧正面', async () => {
+test('processPoster 横版 center 模式居中裁切', async () => {
   const src = await makeImage(800, 538)
-  const out = await processPoster({ buffer: src, crop: 'top', removeWatermark: false })
+  const out = await processPoster({ buffer: src, crop: 'center', removeWatermark: false })
   assert.equal(out.width, targetPosterWidth(538))
   assert.equal(out.height, 538)
 })

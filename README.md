@@ -2,7 +2,7 @@
 
 > 基于 Electron + React + TypeScript 的 AVDC 重构版，面向本地影片元数据刮削与媒体库整理。
 
-[![Status](https://img.shields.io/badge/status-stage%202%20done-blue.svg?style=flat-square)](#)
+[![Status](https://img.shields.io/badge/status-stage%203%20in%20progress-blue.svg?style=flat-square)](#)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg?style=flat-square)](#)
 [![Electron](https://img.shields.io/badge/Electron-33-47848F.svg?style=flat-square&logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square&logo=react)](https://react.dev/)
@@ -35,15 +35,19 @@
 
 ## 2. 当前状态
 
-项目已完成 **阶段 2 — 核心刮削能力**，可在 `npm run dev` 下对真实番号执行端到端刮削：
+项目处于 **阶段 3 — 失败救援**，阶段 1、2 已完成并通过真实番号端到端验证；阶段 3 的部分能力（原地收纳、海报裁切策略对齐、活动行日志）已落地：
 
 - 主界面、任务列表、详情面板、日志抽屉、设置页、工具页的视觉结构已搭建完成，明暗主题与毛玻璃抽屉已多轮打磨。
-- 设置项（刮削源、代理、命名规则、海报裁切、样张/头像下载、NFO 等）已通过 `userData` 下的 JSON 持久化，IPC 通道全链路打通。
+- 设置项（刮削源、代理、命名规则、海报裁切、样张/头像下载、NFO、文件夹收纳等）已通过 `userData` 下的 JSON 持久化，IPC 通道全链路打通。
 - 已接入 JavBus 数据源：番号识别 → 详情/搜索解析（有码/无码路径回退、404 回退搜索）→ 元数据与封面抓取。
-- 媒体产物已落地：海报（sharp 裁切为 2:3 竖版）、fanart、样张剧照（extrafanart）、演员头像（.actors）与 Kodi/Emby/Jellyfin 兼容的 `.nfo`。
+- 刮削成功后**原地收纳**为番号子文件夹（支持纯番号 / 番号+标题 / 番号+演员+标题三种命名），可跟随移动同名外挂字幕（含 `.zh` 等语言后缀），已在收纳文件夹内则不套娃。
+- 媒体产物已落地：海报（sharp 裁切为 2:3 竖版，裁切位置可设为右半边正面封面 / 居中 / 完整）、fanart、样张剧照（extrafanart）、演员头像（.actors）与 Kodi/Emby/Jellyfin 兼容的 `.nfo`。
+- 海报裁切策略与详情预览联动：经确认无高清竖版海报可直接抓取，统一由横版 fanart 裁切，默认取右半边（光盘正面封面）；详情面板远程封面预览跟随同一设置，本地成品海报落盘后自动切换。
+- 渲染端图片全部经主进程 IPC 代理读取（远程封面补 Referer、本地文件走 `file://` 读取后回传 data URL），规避防盗链与 dev 跨域。
+- 日志抽屉采用统一时间线：下载各阶段（封面 / 样张 / 头像）以活动行原位刷新，阶段结束提交为日志行；底栏常驻当前活动信息。
 - HTTP 客户端支持 gzip/deflate/br 解压、超时与二进制缓冲；图片下载含魔术字节识别、HD 封面失败回退缩略图、原子写入。
 
-也就是说：当前仓库已能对真实视频文件完成「识别 → 抓取 → 下载图片 → 生成 NFO」的完整流程。后续为失败救援、工具页补齐与打包，进度见 [Roadmap](#7-roadmap)。
+后续为失败救援剩余项（软链接、番号识别容错、单文件重刮、更多数据源）、工具页补齐与打包，进度见 [Roadmap](#7-roadmap)。
 
 ## 3. 技术栈
 
@@ -122,14 +126,17 @@ NeoAVDC/
 │   │   │       ├── parseJavBus.ts   # HTML 解析
 │   │   │       └── *.test.ts
 │   │   ├── media/
-│   │   │   ├── fileNames.ts         # poster/fanart/nfo/actors 命名
+│   │   │   ├── fileNames.ts         # poster/fanart/nfo/actors 命名 & 文件夹命名
 │   │   │   ├── imageDownloader.ts   # 封面/样张/头像下载与回退
-│   │   │   ├── imageProcessor.ts    # sharp 海报裁切 / 去水印
+│   │   │   ├── imageProcessor.ts    # sharp 海报裁切（右半边/居中/完整）/ 去水印
 │   │   │   ├── nfoWriter.ts         # Kodi movie NFO 生成
+│   │   │   ├── organizeMedia.ts     # 刮削后原地收纳为番号子文件夹
+│   │   │   ├── readImage.ts         # 主进程图片代理（远程补 Referer / 本地读盘）
 │   │   │   ├── writeMedia.ts        # 媒体产物落盘编排
 │   │   │   └── *.test.ts
 │   │   └── store/
-│   │       └── sanitizeSettings.ts  # 设置持久化清洗
+│   │       ├── sanitizeSettings.ts  # 设置持久化清洗
+│   │       └── settingsStore.ts     # userData JSON 读写封装
 │   ├── preload/
 │   │   └── index.ts         # contextBridge 暴露给渲染端的 API
 │   ├── renderer/
@@ -139,6 +146,7 @@ NeoAVDC/
 │   │       ├── main.tsx
 │   │       ├── theme.ts     # 主题切换
 │   │       ├── status.ts    # 状态语义映射
+│   │       ├── useImageSource.ts  # 经 IPC 加载图片为 data URL 的 Hook
 │   │       ├── styles.css   # 全局样式（唯一样式入口）
 │   │       └── components/  # TopBar / DropZone / TaskList /
 │   │                        # DetailPanel / LogDrawer /
@@ -180,9 +188,12 @@ NeoAVDC/
    - sharp 海报裁切为 2:3 竖版、去水印模糊、JPEG 重编码
    - Kodi/Emby/Jellyfin 兼容的 NFO 文件生成
    - 已通过真实番号端到端验证
-3. **阶段 3 — 失败救援**
-   - 软链接模式
-   - 番号识别容错、单文件重刮削
+3. **阶段 3 — 失败救援（进行中）**
+   - ✅ 原地收纳：刮削成功后建立番号子文件夹并移入视频及同名外挂字幕
+   - ✅ 海报裁切策略对齐：默认右半边正面封面，预览与落盘一致
+   - 🔲 软链接模式
+   - 🔲 番号识别容错、单文件重刮削
+   - 🔲 更多数据源接入
 4. **阶段 4 — 工具页与打包**
    - 工具页功能（视频整理、封面裁剪等）
    - 基于 electron-builder 的安装包产出（macOS / Windows）

@@ -37,6 +37,8 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
 
   ipcMain.handle(IPC.SETTINGS_SET, (_e, patch: unknown) => settingsStore.update(patch))
 
+  ipcMain.handle(IPC.READ_IMAGE, (_e, source: string) => engine.readImage(source))
+
   ipcMain.handle('app:openPath', async (_e, target: string) => {
     if (typeof target === 'string' && target.length > 0) await shell.openPath(target)
   })
@@ -53,6 +55,7 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
       IPC.DIALOG_SELECT_FOLDER,
       IPC.SETTINGS_GET,
       IPC.SETTINGS_SET,
+      IPC.READ_IMAGE,
       'app:openPath'
     ] as const) {
       ipcMain.removeHandler(channel)

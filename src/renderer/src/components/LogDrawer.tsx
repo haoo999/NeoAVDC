@@ -1,37 +1,76 @@
 import { useEffect, useRef } from 'react'
-import type { LogLine, Progress } from '../../../shared/types'
+import type { LogLevel, Progress } from '../../../shared/types'
 import { fmtTime } from '../status'
+
+export type TimelineEntry =
+  | { kind: 'log'; time: number; level: LogLevel; message: string }
+  | { kind: 'activity'; key: string; startedAt: number; level: LogLevel; message: string }
 
 interface LogDrawerProps {
   open: boolean
   onToggle: () => void
-  logs: LogLine[]
+  entries: TimelineEntry[]
   progress: Progress
+  onClear: () => void
 }
 
-export default function LogDrawer({ open, onToggle, logs, progress }: LogDrawerProps) {
+export default function LogDrawer({
+  open,
+  onToggle,
+  entries,
+  progress,
+  onClear
+}: LogDrawerProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
+  const sig = entries.map((e) => `${e.kind}:${e.message}`).join('|')
+
   useEffect(() => {
     if (open && bodyRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
-  }, [logs, open])
+  }, [sig, open])
 
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
-  const lastLog = logs.length > 0 ? logs[logs.length - 1] : null
-  const hasError = logs.some((l) => l.level === 'error')
+  // 底栏活动信息位：只显示当前正在进行的活动
+  const currentActivity = (() => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i]
+      if (e.kind === 'activity') return e
+    }
+    return null
+  })()
 
   return (
     <div className={`logdrawer ${open ? 'open' : ''}`}>
       <div className="ld-reveal">
+        <div className="ld-head">
+          <span>运行日志</span>
+          <button className="ld-clear" type="button" onClick={onClear}>
+            清空
+          </button>
+        </div>
         <div className="ld-body" ref={bodyRef}>
-          {logs.length === 0 && <div className="ll">等待启动…</div>}
-          {logs.map((l, i) => (
-            <div key={`${l.time}-${i}`} className={`ll ${l.level ? 'll-' + l.level : ''}`}>
-              <span className="t">{fmtTime(l.time)}</span>
-              <span>{l.message}</span>
-            </div>
-          ))}
+          {entries.length === 0 && <div className="ll">等待启动…</div>}
+          {entries.map((e, i) =>
+            e.kind === 'log' ? (
+              <div
+                key={`log:${e.time}-${i}`}
+                className={`ll ${e.level ? 'll-' + e.level : ''}`}
+              >
+                <span className="t">{fmtTime(e.time)}</span>
+                <span>{e.message}</span>
+              </div>
+            ) : (
+              <div
+                key={`act:${e.key}`}
+                className={`ll ll-${e.level} ll-activity`}
+              >
+                <span className="t">{fmtTime(e.startedAt)}</span>
+                <span className="ll-act-dot" />
+                <span>{e.message}</span>
+              </div>
+            )
+          )}
         </div>
       </div>
       <div className="statusbar">
@@ -50,13 +89,13 @@ export default function LogDrawer({ open, onToggle, logs, progress }: LogDrawerP
             <polyline points="18 15 12 9 6 15" />
           </svg>
           <span>LOG</span>
-          <span className="sb-count">{logs.length}</span>
+          <span className="sb-count">{entries.length}</span>
         </button>
         <div className="sb-item sb-last">
-          {lastLog ? (
+          {currentActivity ? (
             <>
-              {hasError && <span className="sb-dot err" />}
-              <span className="sb-last-text">{lastLog.message}</span>
+              <span className="sb-dot run" />
+              <span className="sb-last-text">{currentActivity.message}</span>
             </>
           ) : (
             <span className="sb-idle">就绪</span>

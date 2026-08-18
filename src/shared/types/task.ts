@@ -1,4 +1,11 @@
-export type TaskStatus = 'pending' | 'queued' | 'scraping' | 'success' | 'failed' | 'skipped'
+export type TaskStatus =
+  | 'pending'
+  | 'queued'
+  | 'scraping'
+  | 'downloading'
+  | 'success'
+  | 'failed'
+  | 'skipped'
 
 export interface TaskMetadata {
   title: string
@@ -22,5 +29,7 @@ export interface Task {
   error: string | null
   outputDir: string | null
   metadata: TaskMetadata | null
+  coverUrl: string | null
+  posterUrl: string | null
   addedAt: number
 }

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type {
+  ActivityLine,
   EngineEvent,
   LogLevel,
   Progress,
@@ -14,6 +15,8 @@ import type { SettingsStore } from './store/settingsStore'
 import { createHttpClient, createSources } from './scrapers'
 import type { ScrapeContext, ScrapeSource } from './scrapers'
 import { writeMediaAssets } from './media/writeMedia'
+import { organizeVideo } from './media/organizeMedia'
+import { readImageAsDataUrl } from './media/readImage'
 import type { HttpClient } from './net/httpClient'
 
 const VIDEO_EXTS = [
@@ -33,6 +36,7 @@ export class Engine {
   private win: BrowserWindow | null = null
   private readonly settingsStore: SettingsStore
   private readonly tasks: Task[] = []
+  private readonly imageCache = new Map<string, string>()
   private running = false
 
   constructor(settingsStore: SettingsStore) {
@@ -115,6 +119,8 @@ export class Engine {
       error: null,
       outputDir: null,
       metadata: null,
+      coverUrl: null,
+      posterUrl: null,
       addedAt: Date.now()
     })
   }
@@ -137,7 +143,12 @@ export class Engine {
       const ctx: ScrapeContext = { http }
 
       for (const task of this.tasks) {
-        if (task.status === 'success' || task.status === 'scraping') continue
+        if (
+          task.status === 'success' ||
+          task.status === 'scraping' ||
+          task.status === 'downloading'
+        )
+          continue
         await this.processTask(task, sources, ctx, http, settings)
       }
     } finally {
@@ -186,6 +197,25 @@ export class Engine {
     this.emitProgress()
   }
 
+  // 供渲染端读取海报/封面：本地 file:// 直接读，远程用带 Referer 的 http 客户端抓取，
+  // 统一转成 data URL，绕过防盗链和 dev 下 file:// 跨域限制。结果做进程内缓存。
+  async readImage(source: string): Promise<string> {
+    if (typeof source !== 'string' || source.length === 0) {
+      throw new Error('图片地址为空')
+    }
+    const cached = this.imageCache.get(source)
+    if (cached) return cached
+
+    const settings = this.settingsStore.getAll()
+    const http = createHttpClient({
+      proxyUrl: settings.proxyUrl,
+      requestIntervalSec: 0
+    })
+    const dataUrl = await readImageAsDataUrl(http, source)
+    this.imageCache.set(source, dataUrl)
+    return dataUrl
+  }
+
   private async processTask(
     task: Task,
     sources: ScrapeSource[],
@@ -218,28 +248,121 @@ export class Engine {
     task.title = metadata.title
     task.website = sources[0].id
     task.metadata = this.toTaskMetadata(metadata)
-    task.outputDir = path.dirname(task.filePath)
-    task.status = 'success'
+    task.coverUrl = metadata.coverUrl || null
+    task.status = 'scraping'
     task.error = null
     this.emitTasks()
     this.emitProgress()
-    this.log('success', `刮削完成：${number} ${metadata.title}`)
+    this.log('success', `元数据命中：${number} ${metadata.title}`)
 
+    // 刮削成功后先原地收纳成文件夹，再在新位置写入媒体产物
+    let videoPath = task.filePath
+    this.log('info', `[${number}] 收纳文件…`)
     try {
-      const summary = await writeMediaAssets(http, task.filePath, metadata, settings)
-      if (summary.skippedNfo) {
-        this.log('info', `[${number}] ${summary.notes.join('；')}`)
-      } else {
-        const bits: string[] = []
-        if (summary.nfoPath) bits.push(`NFO`)
-        if (summary.posterPath) bits.push(`海报`)
-        if (summary.sampleCount > 0) bits.push(`样张×${summary.sampleCount}`)
-        if (summary.actorCount > 0) bits.push(`演员头像×${summary.actorCount}`)
-        if (bits.length > 0) this.log('success', `[${number}] 已写入：${bits.join('、')}`)
-        for (const note of summary.notes) this.log('warn', `[${number}] ${note}`)
+      const organized = organizeVideo(task.filePath, number, settings.folderNaming, metadata, {
+        followSubtitles: settings.followSubtitles
+      })
+      if (organized.moved) {
+        videoPath = organized.videoPath
+        task.filePath = organized.videoPath
+        const sidecarNote =
+          organized.movedSidecars.length > 0 ? `（含字幕×${organized.movedSidecars.length}）` : ''
+        this.log(
+          'info',
+          `[${number}] 已收纳到 ${path.basename(organized.folderPath)}/${sidecarNote}`
+        )
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      this.log('warn', `[${number}] 收纳失败，回退原地写入：${msg}`)
+    }
+    task.outputDir = path.dirname(videoPath)
+
+    // 进入媒体产物下载阶段，状态切到「下载中」并实时上报正在处理的项目
+    task.status = 'downloading'
+    this.emitTasks()
+    this.emitProgress()
+
+    // 各下载阶段的活动行 key，进度原位刷新、阶段结束统一提交
+    const stageKeys = {
+      cover: `${task.id}:cover`,
+      sample: `${task.id}:sample`,
+      actor: `${task.id}:actor`
+    }
+
+    try {
+      const summary = await writeMediaAssets(http, videoPath, metadata, settings, (p) => {
+        const prefix = `[${number}]`
+        if (p.done) {
+          // 阶段结束：立即把活动行原位替换为最终结果
+          const ok = (p.count ?? 0) > 0
+          if (p.stage === 'cover') {
+            this.commitActivity(
+              stageKeys.cover,
+              ok ? 'success' : 'warn',
+              ok ? `${prefix} 封面下载完成` : `${prefix} 封面下载失败`
+            )
+          } else if (p.stage === 'sample') {
+            this.commitActivity(
+              stageKeys.sample,
+              ok ? 'success' : 'warn',
+              ok ? `${prefix} 样张下载完成（${p.count} 张）` : `${prefix} 样张下载失败`
+            )
+          } else if (p.stage === 'actor') {
+            this.commitActivity(
+              stageKeys.actor,
+              ok ? 'success' : 'warn',
+              ok
+                ? `${prefix} 演员头像下载完成（${p.count} 个）`
+                : `${prefix} 演员头像下载失败`
+            )
+          }
+          return
+        }
+        if (p.stage === 'cover') {
+          const msg = p.index === 1 ? `${prefix} 下载封面…` : `${prefix} 处理海报…`
+          this.activity(stageKeys.cover, 'info', msg)
+        } else if (p.stage === 'sample') {
+          this.activity(
+            stageKeys.sample,
+            'info',
+            `${prefix} 下载样张 ${p.index}/${p.total}…`
+          )
+        } else if (p.stage === 'actor') {
+          const who = p.label ? ` ${p.label}` : ''
+          this.activity(
+            stageKeys.actor,
+            'info',
+            `${prefix} 下载演员头像 ${p.index}/${p.total}${who}…`
+          )
+        }
+      })
+
+      if (summary.skippedNfo) {
+        this.log('info', `[${number}] ${summary.notes.join('；')}`)
+      } else {
+        if (summary.nfoPath) this.log('success', `[${number}] NFO 已写入`)
+        for (const note of summary.notes) this.log('warn', `[${number}] ${note}`)
+      }
+
+      // 媒体产物全部落盘后才标记成功
+      task.status = 'success'
+      task.error = null
+      if (summary.posterPath) {
+        task.posterUrl = this.pathToFileUrl(summary.posterPath)
+      }
+      this.emitTasks()
+      this.emitProgress()
+      this.log('success', `[${number}] 完成`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      task.status = 'failed'
+      task.error = `媒体写入失败：${msg}`
+      this.emitTasks()
+      this.emitProgress()
+      this.commitActivity(stageKeys.cover, 'error', `[${number}] 下载中断`)
+      this.commitActivity(stageKeys.sample, 'error', `[${number}] 下载中断`)
+      this.commitActivity(stageKeys.actor, 'error', `[${number}] 下载中断`)
       this.log('error', `[${number}] 媒体写入失败：${msg}`)
     }
   }
@@ -279,6 +402,15 @@ export class Engine {
     }
   }
 
+  private pathToFileUrl(p: string): string {
+    let resolved = path.resolve(p)
+    if (process.platform === 'win32') {
+      resolved = resolved.replace(/\\/g, '/')
+      if (!resolved.startsWith('/')) resolved = `/${resolved}`
+    }
+    return `file://${encodeURI(resolved)}`
+  }
+
   private markFailed(task: Task, message: string): void {
     task.status = 'failed'
     task.error = message
@@ -293,7 +425,9 @@ export class Engine {
 
   private countByStatus(): { done: number; total: number } {
     const total = this.tasks.length
-    const done = this.tasks.filter((t) => t.status === 'success' || t.status === 'failed').length
+    const done = this.tasks.filter(
+      (t) => t.status === 'success' || t.status === 'failed' || t.status === 'skipped'
+    ).length
     return { done, total }
   }
 
@@ -313,6 +447,17 @@ export class Engine {
 
   private log(level: LogLevel, message: string): void {
     this.emit({ type: 'log', line: { time: Date.now(), level, message } })
+  }
+
+  // 更新活动进度行（同一 key 原位刷新，不逐行追加）
+  private activity(key: string, level: LogLevel, message: string): void {
+    const line: ActivityLine = { key, level, message }
+    this.emit({ type: 'activity-update', line })
+  }
+
+  // 把活动行提交为一条最终日志并从活动区移除
+  private commitActivity(key: string, level: LogLevel, message: string): void {
+    this.emit({ type: 'activity-commit', key, line: { time: Date.now(), level, message } })
   }
 
   private emit(event: EngineEvent): void {

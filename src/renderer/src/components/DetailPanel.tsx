@@ -1,15 +1,36 @@
-import type { Task } from '../../../shared/types'
+import { useImageSource } from '../useImageSource'
+import type { CropMode, Task } from '../../../shared/types'
 import { STATUS_META, fmtTime } from '../status'
 
 interface DetailPanelProps {
   task: Task
+  cropMode: CropMode
   onClose: () => void
   onRetry: (id: string) => void
   running: boolean
 }
 
-export default function DetailPanel({ task, onClose, onRetry, running }: DetailPanelProps) {
+// 远程横版封面在竖版海报框里的对齐方式，跟随裁切设置：
+// right 取右半边（正面封面），center 居中，full 完整显示（letterbox）。
+function coverObjectPosition(crop: CropMode): string {
+  if (crop === 'right') return 'right center'
+  if (crop === 'full') return 'center center'
+  return 'center center'
+}
+
+export default function DetailPanel({ task, cropMode, onClose, onRetry, running }: DetailPanelProps) {
   const m = task.metadata
+  const posterSrc = useImageSource(task.posterUrl)
+  const coverSrc = useImageSource(task.coverUrl)
+  // 本地海报已是 2:3 裁切好的成品，优先用；远程封面需要按设置在框内对齐
+  const showingLocalPoster = Boolean(posterSrc)
+  const imgSrc = posterSrc ?? coverSrc
+  const imgStyle = showingLocalPoster
+    ? undefined
+    : {
+        objectFit: cropMode === 'full' ? ('contain' as const) : ('cover' as const),
+        objectPosition: coverObjectPosition(cropMode)
+      }
   return (
     <aside className="detail">
       <div className="detail-head">
@@ -24,7 +45,17 @@ export default function DetailPanel({ task, onClose, onRetry, running }: DetailP
       </div>
 
       <div className="detail-poster">
-        {task.number ?? '—'}
+        {imgSrc ? (
+          <img
+            className="detail-poster-img"
+            src={imgSrc}
+            alt={task.title ?? task.number ?? 'poster'}
+            loading="lazy"
+            style={imgStyle}
+          />
+        ) : (
+          <span>{task.number ?? '—'}</span>
+        )}
       </div>
 
       <div className="detail-title">{task.title ?? '等待刮削…'}</div>
@@ -71,7 +102,13 @@ export default function DetailPanel({ task, onClose, onRetry, running }: DetailP
       <div className="detail-actions">
         <button
           className="btn ghost"
-          disabled={running || task.status === 'scraping' || task.status === 'queued' || task.status === 'skipped'}
+          disabled={
+            running ||
+            task.status === 'scraping' ||
+            task.status === 'downloading' ||
+            task.status === 'queued' ||
+            task.status === 'skipped'
+          }
           onClick={() => onRetry(task.id)}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

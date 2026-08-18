@@ -13,13 +13,13 @@ const FOLDER_NAMING_LABELS: Record<FolderNamingMode, string> = {
 }
 
 const CROP_LABELS: Record<CropMode, string> = {
+  right: '正面海报（右半边）',
   center: '居中裁切',
-  full: '完整封面',
-  top: '顶部对齐'
+  full: '完整封面'
 }
 
 const FOLDER_NAMING_MODES: FolderNamingMode[] = ['number', 'numberTitle', 'numberActorTitle']
-const CROP_MODES: CropMode[] = ['center', 'full', 'top']
+const CROP_MODES: CropMode[] = ['right', 'center', 'full']
 
 export default function SettingsPage() {
   const api = window.neoavdc

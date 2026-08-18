@@ -4,9 +4,11 @@ import path from 'node:path'
 import os from 'node:os'
 import {
   actorThumbPath,
+  buildFolderName,
   buildMediaPaths,
   extraThumbPath,
   inferExtension,
+  isInsideOrganizedFolder,
   posterPath,
   fanartPath,
   sanitizeFileName
@@ -44,4 +46,31 @@ test('actorThumbPath / extraThumbPath 命名规范', () => {
   assert.equal(actorThumbPath(actorsDir, '葵 つかさ'), path.join(actorsDir, '葵 つかさ.jpg'))
   assert.equal(extraThumbPath(path.join(os.tmpdir(), 'ext'), 0, '.jpg'), path.join(os.tmpdir(), 'ext', 'thumb001.jpg'))
   assert.equal(extraThumbPath(path.join(os.tmpdir(), 'ext'), 9, '.png'), path.join(os.tmpdir(), 'ext', 'thumb010.png'))
+})
+
+test('buildFolderName 按命名模式生成文件夹名', () => {
+  const data = { title: 'SSIS-001 タイトル', actors: [{ name: '葵' }, { name: '乙白' }] }
+  assert.equal(buildFolderName('number', 'SSIS-001', data), 'SSIS-001')
+  assert.equal(buildFolderName('numberTitle', 'SSIS-001', data), 'SSIS-001 タイトル')
+  assert.equal(
+    buildFolderName('numberActorTitle', 'SSIS-001', data),
+    'SSIS-001 葵、乙白 タイトル'
+  )
+})
+
+test('buildFolderName 标题不含番号前缀时也能正常拼接', () => {
+  const data = { title: 'タイトル', actors: [] }
+  assert.equal(buildFolderName('numberTitle', 'SSIS-001', data), 'SSIS-001 タイトル')
+})
+
+test('buildFolderName 清洗非法路径字符', () => {
+  const data = { title: 'a/b:c', actors: [] }
+  assert.equal(buildFolderName('numberTitle', 'SSIS-001', data), 'SSIS-001 abc')
+})
+
+test('isInsideOrganizedFolder 识别已收纳状态', () => {
+  assert.equal(isInsideOrganizedFolder('/dl/SSIS-001/SSIS-001.mp4', 'SSIS-001'), true)
+  assert.equal(isInsideOrganizedFolder('/dl/SSIS-001 タイトル/SSIS-001.mp4', 'SSIS-001'), true)
+  assert.equal(isInsideOrganizedFolder('/dl/SSIS-001.mp4', 'SSIS-001'), false)
+  assert.equal(isInsideOrganizedFolder('/dl/SSIS-999/SSIS-001.mp4', 'SSIS-001'), false)
 })

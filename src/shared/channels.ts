@@ -11,7 +11,8 @@ export const IPC = {
   DIALOG_SELECT_FOLDER: 'dialog:selectFolder',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
-  ENGINE_EVENT: 'engine:event'
+  ENGINE_EVENT: 'engine:event',
+  READ_IMAGE: 'media:readImage'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

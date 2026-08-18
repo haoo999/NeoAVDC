@@ -1,9 +1,44 @@
 import path from 'node:path'
+import type { FolderNamingMode, ScrapedMetadata } from '../../shared/types'
 
 const INVALID_CHARS_RE = /[\\/:*?"<>|\u0000-\u001f]/g
 
 export function sanitizeFileName(name: string): string {
   return name.replace(INVALID_CHARS_RE, '').replace(/\s+/g, ' ').trim()
+}
+
+// 标题可能以番号开头（如 "SSIS-001 xxx"），收纳文件夹名不再重复番号
+function stripNumberPrefix(title: string, number: string): string {
+  const trimmed = title.trim()
+  const prefix = `${number} `
+  if (trimmed.toUpperCase().startsWith(prefix.toUpperCase())) {
+    return trimmed.slice(prefix.length).trim()
+  }
+  return trimmed
+}
+
+export function buildFolderName(
+  mode: FolderNamingMode,
+  number: string,
+  data: Pick<ScrapedMetadata, 'title' | 'actors'>
+): string {
+  const parts = [number]
+  if (mode === 'numberActorTitle' && data.actors.length > 0) {
+    const actorNames = data.actors.map((a) => a.name).join('、')
+    parts.push(sanitizeFileName(actorNames))
+  }
+  if (mode === 'numberTitle' || mode === 'numberActorTitle') {
+    const rest = stripNumberPrefix(data.title, number)
+    if (rest) parts.push(sanitizeFileName(rest))
+  }
+  return sanitizeFileName(parts.join(' '))
+}
+
+// 判断视频是否已位于一个以该番号命名的收纳文件夹内（避免重复套娃建子目录）
+export function isInsideOrganizedFolder(videoFilePath: string, number: string): boolean {
+  const parent = path.basename(path.dirname(videoFilePath))
+  if (!parent) return false
+  return parent === number || parent.toUpperCase().startsWith(`${number.toUpperCase()} `)
 }
 
 export function inferExtension(url: string, fallback = '.jpg'): string {

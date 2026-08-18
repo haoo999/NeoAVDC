@@ -13,5 +13,6 @@ export interface NeoApi {
   getPathForFile(file: File): string
   getSettings(): Promise<Settings>
   setSettings(patch: Partial<Settings>): Promise<Settings>
+  readImage(source: string): Promise<string>
   onEngineEvent(cb: (ev: EngineEvent) => void): () => void
 }

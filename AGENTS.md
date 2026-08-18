@@ -7,7 +7,7 @@
 NeoAVDC 是对旧版 Python/PyQt5 AVDC 的重构，面向本地媒体元数据刮削（番号识别、抓取元数据、下载图片、生成 NFO 等）。
 
 - 技术栈：Electron 33 + electron-vite 2 + React 18 + TypeScript 5（strict）；图像处理用 sharp（运行时原生依赖）。
-- 当前阶段：阶段 1（设置持久化 + IPC + 引擎调度）与阶段 2（JavBus 抓取、图片下载、sharp 海报裁切/去水印、NFO 生成）已完成，并通过真实番号 SSIS-001 端到端验证。后续为阶段 3 失败救援、阶段 4 工具页与打包。
+- 当前阶段：阶段 1（设置持久化 + IPC + 引擎调度）与阶段 2（JavBus 抓取、图片下载、sharp 海报裁切/去水印、NFO 生成）已完成，并通过真实番号 SSIS-001 端到端验证。阶段 3（失败救援）进行中：已落地刮削后原地收纳为番号子文件夹、海报裁切策略对齐（默认右半边正面封面，预览与落盘一致）、主进程图片代理、统一时间线活动行日志。剩余：软链接、番号识别容错、单文件重刮、更多数据源。后续为阶段 4 工具页与打包。
 - 架构分层：`src/main`（Electron 主进程 + 引擎 + IPC）、`src/preload`（contextBridge 暴露）、`src/renderer`（React UI）、`src/shared`（主/渲染共享类型）。
 
 ## 2. 常用命令
@@ -65,14 +65,17 @@ src/
 │   │       ├── parseJavBus.ts   # HTML 解析
 │   │       └── *.test.ts
 │   ├── media/
-│   │   ├── fileNames.ts         # poster/fanart/nfo/extrafanart/.actors 命名
+│   │   ├── fileNames.ts         # poster/fanart/nfo/extrafanart/.actors 命名 & 番号文件夹命名
 │   │   ├── imageDownloader.ts   # 封面/样张/头像下载，HD→缩略图回退，魔术字节识别
-│   │   ├── imageProcessor.ts    # sharp 海报 2:3 裁切 + 去水印模糊
+│   │   ├── imageProcessor.ts    # sharp 海报 2:3 裁切（right/center/full）+ 去水印模糊
 │   │   ├── nfoWriter.ts         # Kodi movie NFO 生成
+│   │   ├── organizeMedia.ts     # 刮削后原地收纳为番号子文件夹（含字幕跟随、跨卷回退）
+│   │   ├── readImage.ts         # 主进程图片代理：远程补 Referer、本地 file:// 读盘回传 data URL
 │   │   ├── writeMedia.ts        # 媒体产物落盘编排
 │   │   └── *.test.ts
 │   └── store/
-│       └── sanitizeSettings.ts  # 设置从 userData JSON 读取/清洗
+│       ├── sanitizeSettings.ts  # 设置从 userData JSON 读取/清洗
+│       └── settingsStore.ts     # userData JSON 读写封装
 ├── preload/
 │   └── index.ts     # contextBridge 暴露给 window 的 API
 ├── renderer/src/
@@ -80,6 +83,7 @@ src/
 │   ├── main.tsx
 │   ├── theme.ts     # 主题切换
 │   ├── status.ts    # 状态/语义色相关
+│   ├── useImageSource.ts  # 经 IPC 加载图片为 data URL 的 Hook
 │   ├── styles.css   # 全局样式（唯一样式入口）
 │   └── components/  # TopBar / DropZone / TaskList / DetailPanel
 │                      LogDrawer / SettingsPage / ToolsPage
@@ -146,7 +150,14 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
 
 1. ✅ 接入真实刮削引擎：刮削源、代理、命名规则的持久化与读写；IPC 与 Engine 任务调度打通。
 2. ✅ 图片下载 / 海报裁切（sharp 2:3）/ 去水印 / NFO 生成；已接入 JavBus 并通过真实番号端到端验证。
-3. 失败救援：软链接、番号识别容错、单文件重刮、更多数据源。
+3. 失败救援（进行中）：
+   - ✅ 刮削后原地收纳为番号子文件夹（`organizeMedia.ts`，支持字幕跟随、跨卷回退）
+   - ✅ 海报裁切策略对齐：无高清竖版海报可抓，统一由横版 fanart 裁切；`cropMode` 改为 `right/center/full`，默认 `right`（右半边正面封面），详情预览与落盘一致
+   - ✅ 主进程图片代理（`media:readImage` IPC，远程补 Referer、本地 `file://` 读盘回传 data URL）
+   - ✅ 统一时间线活动行日志（下载各阶段原位刷新、结束提交为日志、底栏常驻活动位）
+   - 🔲 软链接模式
+   - 🔲 番号识别容错、单文件重刮
+   - 🔲 更多数据源
 4. 工具页功能补齐 + electron-builder 打包。
 
 ## 8. 与用户协作偏好

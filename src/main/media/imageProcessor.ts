@@ -28,15 +28,26 @@ export function needsCrop(srcWidth: number, srcHeight: number): boolean {
   return false
 }
 
+/**
+ * 计算竖向上的裁切偏移。
+ * 竖向封面按 2:3 裁掉上下多余部分：
+ * - center/right：垂直居中（right 是横版语义，竖向回退居中）
+ * - full：不裁切
+ */
 export function cropTop(crop: CropMode, srcHeight: number, targetHeight: number): number {
-  if (crop === 'top') return 0
   if (crop === 'full') return 0
   return Math.max(0, Math.round((srcHeight - targetHeight) / 2))
 }
 
-// 横版全封面（背面|书脊|正面）裁宽：top 模式取右侧正面，center 居中
+/**
+ * 计算水平方向的裁切偏移。
+ * 横版全封面（背面|书脊|正面）转竖海报时：
+ * - right：取右半边（正面封面）
+ * - center：水平居中
+ * - full：不裁切
+ */
 export function cropLeft(crop: CropMode, srcWidth: number, targetWidth: number): number {
-  if (crop === 'top') return Math.max(0, srcWidth - targetWidth)
+  if (crop === 'right') return Math.max(0, srcWidth - targetWidth)
   if (crop === 'full') return 0
   return Math.max(0, Math.round((srcWidth - targetWidth) / 2))
 }

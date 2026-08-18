@@ -26,6 +26,8 @@ function asFolderNaming(value: unknown): FolderNamingMode {
 }
 
 function asCropMode(value: unknown): CropMode {
+  // 兼容旧版 'top'：它对横版封面的语义就是取右半边正面，映射到新的 'right'
+  if (value === 'top') return 'right'
   return typeof value === 'string' && CROP_SET.has(value)
     ? (value as CropMode)
     : DEFAULT_SETTINGS.cropMode

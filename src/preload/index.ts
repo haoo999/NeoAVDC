@@ -14,6 +14,7 @@ const api: NeoApi = {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
   setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
+  readImage: (source) => ipcRenderer.invoke(IPC.READ_IMAGE, source),
   onEngineEvent: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: EngineEvent): void => cb(ev)
     ipcRenderer.on(IPC.ENGINE_EVENT, listener)

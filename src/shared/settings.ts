@@ -5,7 +5,7 @@ export const DEFAULT_SETTINGS: Settings = {
   proxyUrl: '',
   requestIntervalSec: 2,
   folderNaming: 'number',
-  cropMode: 'center',
+  cropMode: 'right',
   followSubtitles: true,
   removeWatermark: true,
   downloadHdCover: true,
