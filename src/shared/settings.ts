@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   followSubtitles: true,
   removeWatermark: true,
   downloadHdCover: true,
+  downloadSamples: false,
   generateNfo: true,
   downloadActorAvatars: false,
   skipExistingNfo: true

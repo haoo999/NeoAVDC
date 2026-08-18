@@ -9,5 +9,8 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/main/number/parseNumber.ts", "src/main/number/parseNumber.test.ts"]
+  "include": [
+    "src/main/**/*.ts",
+    "src/shared/**/*.ts"
+  ]
 }

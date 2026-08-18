@@ -58,6 +58,7 @@ export function sanitizeSettings(input: unknown): Settings {
     followSubtitles: asBool(raw['followSubtitles'], DEFAULT_SETTINGS.followSubtitles),
     removeWatermark: asBool(raw['removeWatermark'], DEFAULT_SETTINGS.removeWatermark),
     downloadHdCover: asBool(raw['downloadHdCover'], DEFAULT_SETTINGS.downloadHdCover),
+    downloadSamples: asBool(raw['downloadSamples'], DEFAULT_SETTINGS.downloadSamples),
     generateNfo: asBool(raw['generateNfo'], DEFAULT_SETTINGS.generateNfo),
     downloadActorAvatars: asBool(
       raw['downloadActorAvatars'],

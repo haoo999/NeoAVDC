@@ -24,6 +24,7 @@ export interface Settings {
   followSubtitles: boolean
   removeWatermark: boolean
   downloadHdCover: boolean
+  downloadSamples: boolean
   generateNfo: boolean
   downloadActorAvatars: boolean
   skipExistingNfo: boolean

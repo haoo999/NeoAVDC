@@ -230,6 +230,22 @@ export default function SettingsPage() {
                 </label>
               </div>
             </div>
+            <div className="set-row">
+              <div>
+                <div className="label">下载样张剧照</div>
+                <span className="hint">写入 -extrafanart 目录，Kodi 可浏览</span>
+              </div>
+              <div className="set-control switch-row">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.downloadSamples}
+                    onChange={(e) => commit({ downloadSamples: e.target.checked })}
+                  />
+                  <span className="track" />
+                </label>
+              </div>
+            </div>
           </section>
 
           <section className="set-section">

@@ -2,13 +2,15 @@ import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import { Engine } from './engine'
 import { registerIpc } from './ipc'
+import { SettingsStore } from './store/settingsStore'
 
 app.commandLine.appendSwitch('no-sandbox')
 if (process.env['ELECTRON_RENDERER_URL']) {
   app.commandLine.appendSwitch('remote-debugging-port', '9229')
 }
 
-const engine = new Engine()
+const settingsStore = new SettingsStore()
+const engine = new Engine(settingsStore)
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -39,7 +41,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpc(engine)
+  registerIpc(engine, settingsStore)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
