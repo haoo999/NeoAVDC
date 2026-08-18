@@ -2,7 +2,7 @@
 
 > 基于 Electron + React + TypeScript 的 AVDC 重构版，面向本地影片元数据刮削与媒体库整理。
 
-[![Status](https://img.shields.io/badge/status-WIP-yellow.svg?style=flat-square)](#)
+[![Status](https://img.shields.io/badge/status-stage%202%20done-blue.svg?style=flat-square)](#)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg?style=flat-square)](#)
 [![Electron](https://img.shields.io/badge/Electron-33-47848F.svg?style=flat-square&logo=electron)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square&logo=react)](https://react.dev/)
@@ -35,13 +35,15 @@
 
 ## 2. 当前状态
 
-项目当前处于 **UI 骨架阶段**：
+项目已完成 **阶段 2 — 核心刮削能力**，可在 `npm run dev` 下对真实番号执行端到端刮削：
 
-- 主界面、任务列表、详情面板、日志抽屉、设置页、工具页的视觉结构已搭建完成。
-- 明暗主题切换、品牌标识、毛玻璃抽屉等视觉细节已多轮打磨。
-- **所有开关、按钮、设置项目前均为 UI 占位，尚未连接真实刮削引擎**——主进程 `Engine` 仍为占位实现，IPC 通道与持久化层待接入。
+- 主界面、任务列表、详情面板、日志抽屉、设置页、工具页的视觉结构已搭建完成，明暗主题与毛玻璃抽屉已多轮打磨。
+- 设置项（刮削源、代理、命名规则、海报裁切、样张/头像下载、NFO 等）已通过 `userData` 下的 JSON 持久化，IPC 通道全链路打通。
+- 已接入 JavBus 数据源：番号识别 → 详情/搜索解析（有码/无码路径回退、404 回退搜索）→ 元数据与封面抓取。
+- 媒体产物已落地：海报（sharp 裁切为 2:3 竖版）、fanart、样张剧照（extrafanart）、演员头像（.actors）与 Kodi/Emby/Jellyfin 兼容的 `.nfo`。
+- HTTP 客户端支持 gzip/deflate/br 解压、超时与二进制缓冲；图片下载含魔术字节识别、HD 封面失败回退缩略图、原子写入。
 
-也就是说：当前仓库可以跑起来看界面，但还不能真正完成刮削任务。功能落地进度见 [Roadmap](#7-roadmap)。
+也就是说：当前仓库已能对真实视频文件完成「识别 → 抓取 → 下载图片 → 生成 NFO」的完整流程。后续为失败救援、工具页补齐与打包，进度见 [Roadmap](#7-roadmap)。
 
 ## 3. 技术栈
 
@@ -51,7 +53,8 @@
 | 构建 | electron-vite 2 + Vite 5 |
 | UI | React 18 + TypeScript 5（strict） |
 | 样式 | 原生 CSS（CSS 变量主题，无 UI/CSS 框架） |
-| 进程通信 | contextBridge + 类型化 IPC（`src/shared/types.ts`） |
+| 进程通信 | contextBridge + 类型化 IPC（`src/shared/channels.ts`） |
+| 图像处理 | sharp（海报裁切、去水印模糊、JPEG 重编码） |
 | 包管理 | npm |
 
 刻意保持依赖精简：没有引入 Redux/Zustand、Tailwind、Ant Design 等，UI 全部由组件 + `styles.css` 构建。
@@ -100,14 +103,33 @@ npm test            # 用 node:test 跑 *.test.ts（零额外依赖，需要 Nod
 NeoAVDC/
 ├── src/
 │   ├── main/                # Electron 主进程
-│   │   ├── index.ts         # app 生命周期 & BrowserWindow
-│   │   ├── engine.ts        # 引擎占位（持有窗口引用并推送事件）
+│   │   ├── index.ts         # app 生命周期 & BrowserWindow（含 9229 调试端口）
+│   │   ├── engine.ts        # 刮削任务调度器，持有窗口引用并推送事件
 │   │   ├── ipc.ts           # IPC 通道注册 & will-quit 清理
 │   │   ├── number/
-│   │   │   ├── parseNumber.ts       # 番号识别纯函数
-│   │   │   └── parseNumber.test.ts  # node:test 用例
-│   │   └── io/
-│   │       └── collectFiles.ts      # 递归文件收集
+│   │   │   ├── parseNumber.ts       # 番号识别纯函数（有码/无码/FC2/HEYZO 等）
+│   │   │   └── parseNumber.test.ts
+│   │   ├── io/
+│   │   │   └── collectFiles.ts      # 递归收集视频文件
+│   │   ├── net/
+│   │   │   ├── httpClient.ts        # HTTP 客户端（gzip/br、超时、缓冲）
+│   │   │   └── httpClient.test.ts
+│   │   ├── scrapers/
+│   │   │   ├── types.ts             # ScraperSource / ScrapedMetadata 接口
+│   │   │   ├── index.ts             # 数据源注册与选择
+│   │   │   └── javbus/
+│   │   │       ├── JavBusSource.ts  # 详情/搜索/回退逻辑
+│   │   │       ├── parseJavBus.ts   # HTML 解析
+│   │   │       └── *.test.ts
+│   │   ├── media/
+│   │   │   ├── fileNames.ts         # poster/fanart/nfo/actors 命名
+│   │   │   ├── imageDownloader.ts   # 封面/样张/头像下载与回退
+│   │   │   ├── imageProcessor.ts    # sharp 海报裁切 / 去水印
+│   │   │   ├── nfoWriter.ts         # Kodi movie NFO 生成
+│   │   │   ├── writeMedia.ts        # 媒体产物落盘编排
+│   │   │   └── *.test.ts
+│   │   └── store/
+│   │       └── sanitizeSettings.ts  # 设置持久化清洗
 │   ├── preload/
 │   │   └── index.ts         # contextBridge 暴露给渲染端的 API
 │   ├── renderer/
@@ -122,8 +144,9 @@ NeoAVDC/
 │   │                        # DetailPanel / LogDrawer /
 │   │                        # SettingsPage / ToolsPage
 │   └── shared/
-│       ├── types.ts         # 主进程 ↔ 渲染进程共享类型
-│       └── channels.ts      # IPC 通道名常量与类型
+│       ├── settings.ts      # 默认设置
+│       ├── channels.ts      # IPC 通道名常量与类型
+│       └── types/           # 主/渲共享类型（settings、scrape 等）
 ├── anthropic-design-system.md   # 设计系统权威文档
 ├── electron.vite.config.ts
 ├── tsconfig.json
@@ -147,14 +170,16 @@ NeoAVDC/
 
 按以下顺序推进，每个阶段完成后才进入下一阶段：
 
-1. **阶段 1 — 引擎接入与持久化**
-   - 刮削源选择、代理、命名规则等设置项的持久化
+1. ✅ **阶段 1 — 引擎接入与持久化**
+   - 刮削源选择、代理、命名规则等设置项的持久化（`userData` JSON store）
    - IPC 通道打通：`settings:get/set`、`scrape:start` 等
    - 主进程 `Engine` 从占位演进为真实任务调度器
-2. **阶段 2 — 核心刮削能力**
-   - 番号识别、多源抓取、图片下载
-   - 封面/缩略图水印
-   - NFO 文件生成
+2. ✅ **阶段 2 — 核心刮削能力**
+   - 番号识别、JavBus 数据源抓取（有码/无码/搜索回退）
+   - 图片下载：海报（HD→缩略图回退）、fanart、样张剧照、演员头像
+   - sharp 海报裁切为 2:3 竖版、去水印模糊、JPEG 重编码
+   - Kodi/Emby/Jellyfin 兼容的 NFO 文件生成
+   - 已通过真实番号端到端验证
 3. **阶段 3 — 失败救援**
    - 软链接模式
    - 番号识别容错、单文件重刮削

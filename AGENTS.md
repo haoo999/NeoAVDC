@@ -6,8 +6,8 @@
 
 NeoAVDC 是对旧版 Python/PyQt5 AVDC 的重构，面向本地媒体元数据刮削（番号识别、抓取元数据、下载图片、生成 NFO 等）。
 
-- 技术栈：Electron 33 + electron-vite 2 + React 18 + TypeScript 5（strict）。
-- 当前阶段：UI 骨架已完成并经过多轮视觉打磨；所有开关/功能均未连接真实引擎（main 进程为占位）。
+- 技术栈：Electron 33 + electron-vite 2 + React 18 + TypeScript 5（strict）；图像处理用 sharp（运行时原生依赖）。
+- 当前阶段：阶段 1（设置持久化 + IPC + 引擎调度）与阶段 2（JavBus 抓取、图片下载、sharp 海报裁切/去水印、NFO 生成）已完成，并通过真实番号 SSIS-001 端到端验证。后续为阶段 3 失败救援、阶段 4 工具页与打包。
 - 架构分层：`src/main`（Electron 主进程 + 引擎 + IPC）、`src/preload`（contextBridge 暴露）、`src/renderer`（React UI）、`src/shared`（主/渲染共享类型）。
 
 ## 2. 常用命令
@@ -47,13 +47,32 @@ npm test           # tsc -p tsconfig.test.json 编译到 out-test/ 后用 node -
 src/
 ├── main/
 │   ├── index.ts     # app 生命周期、BrowserWindow、9229 调试端口
-│   ├── engine.ts    # 引擎占位，持有 BrowserWindow 引用以推送 ENGINE_EVENT
+│   ├── engine.ts    # 刮削任务调度器，持有 BrowserWindow 以推送 ENGINE_EVENT
 │   ├── ipc.ts       # registerIpc(engine)，IPC 通道注册与 will-quit 清理
 │   ├── number/
 │   │   ├── parseNumber.ts       # 番号识别纯函数（有码/无码/FC2/HEYZO/欧美/cdN/-C 等）
 │   │   └── parseNumber.test.ts  # node:test 用例
-│   └── io/
-│       └── collectFiles.ts      # 递归收集视频文件（全路径/相对路径/大小）
+│   ├── io/
+│   │   └── collectFiles.ts      # 递归收集视频文件（全路径/相对路径/大小）
+│   ├── net/
+│   │   ├── httpClient.ts        # HTTP 客户端（gzip/deflate/br、超时、getBuffer）
+│   │   └── httpClient.test.ts
+│   ├── scrapers/
+│   │   ├── types.ts             # ScraperSource / ScrapedMetadata 接口
+│   │   ├── index.ts             # 数据源注册与按设置选择
+│   │   └── javbus/
+│   │       ├── JavBusSource.ts  # 详情/搜索/有码无码/404 回退
+│   │       ├── parseJavBus.ts   # HTML 解析
+│   │       └── *.test.ts
+│   ├── media/
+│   │   ├── fileNames.ts         # poster/fanart/nfo/extrafanart/.actors 命名
+│   │   ├── imageDownloader.ts   # 封面/样张/头像下载，HD→缩略图回退，魔术字节识别
+│   │   ├── imageProcessor.ts    # sharp 海报 2:3 裁切 + 去水印模糊
+│   │   ├── nfoWriter.ts         # Kodi movie NFO 生成
+│   │   ├── writeMedia.ts        # 媒体产物落盘编排
+│   │   └── *.test.ts
+│   └── store/
+│       └── sanitizeSettings.ts  # 设置从 userData JSON 读取/清洗
 ├── preload/
 │   └── index.ts     # contextBridge 暴露给 window 的 API
 ├── renderer/src/
@@ -65,8 +84,9 @@ src/
 │   └── components/  # TopBar / DropZone / TaskList / DetailPanel
 │                      LogDrawer / SettingsPage / ToolsPage
 └── shared/
-    ├── types.ts     # 主进程与渲染进程共享的类型契约
-    └── channels.ts  # IPC 通道名常量 IPC.* + IpcChannel 类型 + TypedIpcRenderer
+    ├── settings.ts  # 默认设置 DEFAULT_SETTINGS
+    ├── channels.ts  # IPC 通道名常量 IPC.* + IpcChannel 类型 + TypedIpcRenderer
+    └── types/       # 主进程与渲染进程共享的类型契约（settings、scrape 等）
 anthropic-design-system.md   # 设计系统权威文档（改样式前必读）
 electron.vite.config.ts
 tsconfig.node.json           # main/preload/shared
@@ -124,9 +144,9 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
 
 ## 7. Roadmap（阶段顺序）
 
-1. 接入真实刮削引擎：刮削源、代理、命名规则的持久化与读写（SettingsPage 当前开关全是 UI 占位）。
-2. 图片下载 / 水印 / NFO 生成。
-3. 失败救援：软链接、番号识别容错。
+1. ✅ 接入真实刮削引擎：刮削源、代理、命名规则的持久化与读写；IPC 与 Engine 任务调度打通。
+2. ✅ 图片下载 / 海报裁切（sharp 2:3）/ 去水印 / NFO 生成；已接入 JavBus 并通过真实番号端到端验证。
+3. 失败救援：软链接、番号识别容错、单文件重刮、更多数据源。
 4. 工具页功能补齐 + electron-builder 打包。
 
 ## 8. 与用户协作偏好
