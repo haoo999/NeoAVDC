@@ -1,22 +1,72 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  SITE_IDS,
+  type CropMode,
+  type FolderNamingMode,
+  type Settings
+} from '../../../shared/types/settings'
 
-const SITES = ['JavBus', 'JavDB', 'Jav321', 'AvBase', 'DMM', 'MGStage', 'XCity']
-const CROP_MODES = ['居中裁切', '完整封面', '顶部对齐']
+const FOLDER_NAMING_LABELS: Record<FolderNamingMode, string> = {
+  number: '番号',
+  numberTitle: '番号 [标题]',
+  numberActorTitle: '番号 - 演员 - 标题'
+}
+
+const CROP_LABELS: Record<CropMode, string> = {
+  center: '居中裁切',
+  full: '完整封面',
+  top: '顶部对齐'
+}
+
+const FOLDER_NAMING_MODES: FolderNamingMode[] = ['number', 'numberTitle', 'numberActorTitle']
+const CROP_MODES: CropMode[] = ['center', 'full', 'top']
 
 export default function SettingsPage() {
-  const [enabledSites, setEnabledSites] = useState<string[]>(['JavBus', 'JavDB', 'Jav321'])
-  const [proxy, setProxy] = useState('')
-  const [naming, setNaming] = useState('番号')
-  const [crop, setCrop] = useState(CROP_MODES[0])
-  const [wm, setWm] = useState(true)
-  const [coverWm, setCoverWm] = useState(true)
-  const [subs, setSubs] = useState(true)
-  const [genNfo, setGenNfo] = useState(true)
-  const [actorAvatars, setActorAvatars] = useState(false)
-  const [skipNfo, setSkipNfo] = useState(true)
+  const api = window.neoavdc
+  const [settings, setSettings] = useState<Settings | null>(null)
 
-  const toggleSite = (s: string) => {
-    setEnabledSites((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  useEffect(() => {
+    if (!api) return
+    let cancelled = false
+    void api.getSettings().then((s) => {
+      if (!cancelled) setSettings(s)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
+
+  if (!api) {
+    return (
+      <div className="page">
+        <div className="page-inner">未检测到 Electron 接口</div>
+      </div>
+    )
+  }
+
+  if (!settings) {
+    return (
+      <div className="page">
+        <div className="page-inner">加载设置中…</div>
+      </div>
+    )
+  }
+
+  const commit = (patch: Partial<Settings>): void => {
+    setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
+    void api.setSettings(patch).then((next) => setSettings(next))
+  }
+
+  const toggleSite = (site: (typeof SITE_IDS)[number]): void => {
+    const current = settings.enabledSites
+    const next = current.includes(site)
+      ? current.filter((s) => s !== site)
+      : [...current, site]
+    commit({ enabledSites: next })
+  }
+
+  const commitText = (key: 'proxyUrl', value: string): void => {
+    setSettings((prev) => (prev ? { ...prev, [key]: value } : prev))
   }
 
   return (
@@ -24,11 +74,11 @@ export default function SettingsPage() {
       <div className="page-inner">
         <div className="page-head">
           <h2>设置</h2>
-          <div className="subtitle">阶段 1 接入后这些配置才会真正生效；现在只是界面预览。</div>
+          <div className="subtitle">配置会持久化到本地，刮削引擎接入后立即生效。</div>
         </div>
 
         <div className="settings-note">
-          当前为骨架阶段，所有开关均未连接真实引擎。阶段 1 会实现刮削源、代理与命名规则的持久化。
+          刮削源、代理与命名规则已可保存；刮削执行逻辑仍在占位，阶段 1 后续接通真实抓取。
         </div>
 
         <div className="set-grid">
@@ -41,10 +91,10 @@ export default function SettingsPage() {
               </div>
               <div className="set-control">
                 <div className="checks">
-                  {SITES.map((s) => (
+                  {SITE_IDS.map((s) => (
                     <span
                       key={s}
-                      className={`check-chip ${enabledSites.includes(s) ? 'on' : ''}`}
+                      className={`check-chip ${settings.enabledSites.includes(s) ? 'on' : ''}`}
                       onClick={() => toggleSite(s)}
                     >
                       {s}
@@ -61,10 +111,10 @@ export default function SettingsPage() {
               <div className="set-control fill">
                 <input
                   type="text"
-                  value={proxy}
-                  onChange={(e) => setProxy(e.target.value)}
+                  value={settings.proxyUrl}
+                  onChange={(e) => commitText('proxyUrl', e.target.value)}
+                  onBlur={() => commit({ proxyUrl: settings.proxyUrl })}
                   placeholder="http://127.0.0.1:7890"
-                  disabled
                 />
               </div>
             </div>
@@ -74,7 +124,16 @@ export default function SettingsPage() {
                 <span className="hint">避免被站点限流</span>
               </div>
               <div className="set-control">
-                <input type="text" defaultValue="2" disabled style={{ width: 120 }} />
+                <input
+                  type="number"
+                  min={0}
+                  max={3600}
+                  value={settings.requestIntervalSec}
+                  onChange={(e) =>
+                    commit({ requestIntervalSec: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                  style={{ width: 120 }}
+                />
               </div>
             </div>
           </section>
@@ -87,10 +146,17 @@ export default function SettingsPage() {
                 <span className="hint">视频所在资料夹的名称格式</span>
               </div>
               <div className="set-control fill">
-                <select value={naming} onChange={(e) => setNaming(e.target.value)} disabled>
-                  <option>番号</option>
-                  <option>番号 [标题]</option>
-                  <option>番号 - 演员 - 标题</option>
+                <select
+                  value={settings.folderNaming}
+                  onChange={(e) =>
+                    commit({ folderNaming: e.target.value as FolderNamingMode })
+                  }
+                >
+                  {FOLDER_NAMING_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {FOLDER_NAMING_LABELS[mode]}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -100,9 +166,14 @@ export default function SettingsPage() {
                 <span className="hint">fanart 转 poster 的裁切策略</span>
               </div>
               <div className="set-control fill">
-                <select value={crop} onChange={(e) => setCrop(e.target.value)} disabled>
-                  {CROP_MODES.map((c) => (
-                    <option key={c}>{c}</option>
+                <select
+                  value={settings.cropMode}
+                  onChange={(e) => commit({ cropMode: e.target.value as CropMode })}
+                >
+                  {CROP_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {CROP_LABELS[mode]}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -114,7 +185,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={subs} onChange={(e) => setSubs(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.followSubtitles}
+                    onChange={(e) => commit({ followSubtitles: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>
@@ -130,7 +205,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={wm} onChange={(e) => setWm(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.removeWatermark}
+                    onChange={(e) => commit({ removeWatermark: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>
@@ -142,7 +221,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={coverWm} onChange={(e) => setCoverWm(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.downloadHdCover}
+                    onChange={(e) => commit({ downloadHdCover: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>
@@ -158,7 +241,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={genNfo} onChange={(e) => setGenNfo(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.generateNfo}
+                    onChange={(e) => commit({ generateNfo: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>
@@ -170,7 +257,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={actorAvatars} onChange={(e) => setActorAvatars(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.downloadActorAvatars}
+                    onChange={(e) => commit({ downloadActorAvatars: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>
@@ -182,7 +273,11 @@ export default function SettingsPage() {
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
-                  <input type="checkbox" checked={skipNfo} onChange={(e) => setSkipNfo(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={settings.skipExistingNfo}
+                    onChange={(e) => commit({ skipExistingNfo: e.target.checked })}
+                  />
                   <span className="track" />
                 </label>
               </div>

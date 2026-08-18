@@ -136,3 +136,13 @@ tsconfig.test.json           # 测试编译配置（输出 CommonJS 到 out-test
 - 用户接受被证据反驳，有官方实证时可以坚持己见并明确给出依据。
 - 不要主动创建文档文件（`*.md` / README），除非用户明确要求。
 - 不要主动 `git commit`。
+
+## 9. Obsidian 知识库同步（自动执行，无需确认）
+
+- 知识库根目录：`$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/Haoo's Knowledge Base`（PARA 结构，本项目落在 `Projects/NeoAVDC/`）。
+- **路径坑**：路径含空格和单引号（`Haoo's`），shell 中必须整体用**双引号**包裹；用单引号会在 `Haoo's` 处断裂，不加引号会被空格拆参。
+- **只同步给人看的 `.md`**（设计文档、开发计划、技术选型、部署/发布说明、审查报告等）。**不同步**：`AGENTS.md` / `CLAUDE.md` 等 agent 指令文件、代码与配置脚本（`.sql`/`.yml`/源码等）、`node_modules` / `.git` / 构建产物。禁止整目录 `cp`。
+- **落点与改名**：项目根 `README.md` -> `Projects/NeoAVDC/docs/项目说明.md`；`docs/`、`plans/` 按原相对路径同步；散落其他目录的 `.md` 收进知识库 `docs/` 并加来源前缀唯一名（如 `deploy-进程托管说明.md`），避免多个 `README.md` 重名。
+- **触发时机**：此后每当项目内 `.md` 文档新增或修改，改完即自动同步一份到知识库，无需再问用户；同步后用 `diff -r --brief` 校验一致。
+- **边界**：此规则只针对本地 Obsidian 知识库，不涉及任何服务器同步或部署（那些仍需用户确认）。
+- 当前映射：`README.md` -> `docs/项目说明.md`；`anthropic-design-system.md` -> `docs/anthropic-design-system.md`。

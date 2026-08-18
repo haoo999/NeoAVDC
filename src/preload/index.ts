@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { EngineEvent, NeoApi } from '../shared/types'
+import type { EngineEvent, NeoApi, Settings } from '../shared/types'
 import { IPC } from '../shared/channels'
 
 const api: NeoApi = {
@@ -12,6 +12,8 @@ const api: NeoApi = {
   selectFiles: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FILES),
   selectFolder: () => ipcRenderer.invoke(IPC.DIALOG_SELECT_FOLDER),
   getPathForFile: (file) => webUtils.getPathForFile(file),
+  getSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET),
+  setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke(IPC.SETTINGS_SET, patch),
   onEngineEvent: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: EngineEvent): void => cb(ev)
     ipcRenderer.on(IPC.ENGINE_EVENT, listener)

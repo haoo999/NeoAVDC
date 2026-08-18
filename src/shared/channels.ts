@@ -9,6 +9,8 @@ export const IPC = {
   ENGINE_CLEAR_FINISHED: 'engine:clearFinished',
   DIALOG_SELECT_FILES: 'dialog:selectFiles',
   DIALOG_SELECT_FOLDER: 'dialog:selectFolder',
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SET: 'settings:set',
   ENGINE_EVENT: 'engine:event'
 } as const
 
