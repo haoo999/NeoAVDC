@@ -31,3 +31,10 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# AI agent 本地指令（含个人路径/内部流程，不公开）
+AGENTS.md
+CLAUDE.md
+
+# 临时发版说明（gh release --notes-file 用，提交时不需要）
+release-notes*.md
