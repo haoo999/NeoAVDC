@@ -3,7 +3,7 @@
 ![](https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white)
 ![](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![](https://img.shields.io/badge/platform-macOS-lightgrey?style=flat-square&logo=apple&logoColor=white)
+![](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)
 ![](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 本地运行的 AV 元数据刮削器：从文件名识别番号 → 抓取元数据与图片 → sharp 裁切海报 → 生成 [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → 原地收纳为带海报的番号资料夹。图形界面，数据全部保存在本地，不上传任何内容。
@@ -100,12 +100,18 @@
 
 ### 4.1 下载
 
-- **Release v0.0.1**（macOS universal，Intel + Apple Silicon，dmg）：
-  [NeoAVDC-0.0.1-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.1/NeoAVDC-0.0.1-universal.dmg)
-- 全部版本见 [Releases](../../releases) 页面。
-- **源码**：支持在 Windows / Linux / macOS 上从源码运行，参见 [4.3 源码运行](#43-源码运行)。目前仅官方打包 macOS。
+**Release v0.0.2**：
 
-> 本版本未做 Apple Developer ID 代码签名。首次打开如遇「无法验证开发者」，请在「系统设置 → 隐私与安全性」中点击「仍要打开」，或对解压后的 app 执行 `xattr -dr com.apple.quarantine /Applications/NeoAVDC.app`。
+- **macOS**（universal，Intel + Apple Silicon）：[NeoAVDC-0.0.2-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-universal.dmg)
+- **Windows**（x64，NSIS 安装包）：[NeoAVDC-0.0.2-x64.exe](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.exe)
+- **Linux**（x64，AppImage）：[NeoAVDC-0.0.2-x64.AppImage](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.AppImage)
+
+全部版本见 [Releases](../../releases) 页面。也支持从源码运行（参见 [4.3 源码运行](#43-源码运行)）。
+
+> 本版本未做代码签名（macOS 无 Developer ID、Windows 无 EV 证书）。
+> - **macOS**：首次打开如遇「无法验证开发者」，在「系统设置 → 隐私与安全性」中点击「仍要打开」，或对解压后的 app 执行 `xattr -dr com.apple.quarantine /Applications/NeoAVDC.app`。
+> - **Windows**：SmartScreen 可能提示「Windows 已保护你的电脑」，点击「更多信息 → 仍要运行」。
+> - **Linux**：下载后给 AppImage 加可执行权限 `chmod +x NeoAVDC-0.0.2-x64.AppImage` 后直接运行。
 
 ### 4.2 简明教程
 
@@ -125,7 +131,9 @@ npm run dev        # 开发模式：渲染端 localhost:5173，主进程带 9229
 npm run build      # 构建到 out/
 npm run typecheck  # 双配置 TS 类型检查（main/preload/shared + renderer）
 npm test           # tsc 编译到 out-test/ 后用 node:test 跑 *.test.js，跑完自动清理
-npm run dist:mac   # 打包 macOS universal（dmg/zip）到 release/
+npm run dist:mac     # 打包 macOS universal dmg 到 release/
+npm run dist:win     # 打包 Windows x64 NSIS exe 到 release/（跨平台用 wine）
+npm run dist:linux   # 打包 Linux x64 AppImage 到 release/
 ```
 
 测试仅使用 Node 内置 `node:test` + `node:assert/strict`，未引入 Jest/Vitest/Mocha。
@@ -222,4 +230,4 @@ A：尚未实现，在 Roadmap 中。
 
 - 软链接模式（PT 党：刮削不移动原文件）
 - 番号识别容错、单文件重刮增强
-- electron-builder 打包发布（macOS dmg/zip，后续 Windows/Linux）
+- 代码签名与自动更新（当前 macOS / Windows / Linux 均为未签名包）

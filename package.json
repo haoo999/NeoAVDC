@@ -1,9 +1,9 @@
 {
   "name": "neoavdc",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "NeoAVDC - media metadata scraper, Electron rewrite of AVDC",
   "main": "./out/main/index.js",
-  "author": "haoo",
+  "author": "haoo999",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,7 +13,10 @@
     "test": "tsc -p tsconfig.test.json && node --test \"out-test/**/*.test.js\" && rm -rf out-test",
     "postinstall": "electron-builder install-app-deps",
     "pack:dir": "npm run build && electron-builder --dir",
-    "dist:mac": "npm run build && electron-builder --mac --universal --publish never"
+    "dist:mac": "npm run build && electron-builder --mac dmg:universal --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis:x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage:x64 --publish never",
+    "dist:all": "npm run build && electron-builder --mac dmg:universal --win nsis:x64 --linux AppImage:x64 --publish never"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
@@ -28,6 +31,10 @@
     "@fontsource/sora": "^5.1.0",
     "@img/sharp-darwin-x64": "^0.33.5",
     "@img/sharp-libvips-darwin-x64": "^1.0.4",
+    "@img/sharp-libvips-linux-x64": "^1.0.4",
+    "@img/sharp-libvips-win32-x64": "^1.0.4",
+    "@img/sharp-linux-x64": "^0.33.5",
+    "@img/sharp-win32-x64": "^0.33.5",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -39,7 +46,7 @@
     "vite": "^5.4.11"
   },
   "build": {
-    "appId": "com.haoo.neoavdc",
+    "appId": "com.haoo999.neoavdc",
     "productName": "NeoAVDC",
     "directories": {
       "output": "release",
@@ -61,12 +68,6 @@
           "arch": [
             "universal"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "universal"
-          ]
         }
       ],
       "hardenedRuntime": false,
@@ -85,6 +86,37 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-x64.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NeoAVDC"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-x64.${ext}"
     }
   },
   "allowScripts": {
