@@ -9,6 +9,7 @@ import DetailPanel from './components/DetailPanel'
 import LogDrawer, { type TimelineEntry } from './components/LogDrawer'
 import SettingsPage from './components/SettingsPage'
 import ToolsPage from './components/ToolsPage'
+import ErrorBoundary from './components/ErrorBoundary'
 
 export type Tab = 'tasks' | 'settings' | 'tools'
 
@@ -193,8 +194,16 @@ export default function App() {
             )}
           </div>
         )}
-        {tab === 'settings' && <SettingsPage />}
-        {tab === 'tools' && <ToolsPage />}
+        {tab === 'settings' && (
+          <ErrorBoundary>
+            <SettingsPage />
+          </ErrorBoundary>
+        )}
+        {tab === 'tools' && (
+          <ErrorBoundary>
+            <ToolsPage />
+          </ErrorBoundary>
+        )}
       </div>
       <LogDrawer
         open={logOpen}

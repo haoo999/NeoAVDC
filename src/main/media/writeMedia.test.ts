@@ -29,7 +29,7 @@ function tmpVideo(): string {
 test('writeNfoFile 写入合法 UTF-8 XML 到视频同目录', () => {
   const video = tmpVideo()
   const paths = buildMediaPaths(video)
-  writeNfoFile(paths.nfoPath, DATA, 'SSIS-001-poster.jpg', 'SSIS-001-fanart.jpg', false)
+  writeNfoFile(paths.nfoPath, DATA, 'SSIS-001-poster.jpg', 'SSIS-001-fanart.jpg')
   const xml = fs.readFileSync(paths.nfoPath, 'utf8')
   assert.ok(xml.includes('<?xml version="1.0" encoding="UTF-8"'))
   assert.ok(xml.includes('<movie>'))
@@ -41,7 +41,7 @@ test('writeNfoFile 覆盖已有文件（不跳过）', () => {
   const video = tmpVideo()
   const paths = buildMediaPaths(video)
   fs.writeFileSync(paths.nfoPath, 'OLD')
-  writeNfoFile(paths.nfoPath, DATA, undefined, undefined, false)
+  writeNfoFile(paths.nfoPath, DATA, undefined, undefined)
   const xml = fs.readFileSync(paths.nfoPath, 'utf8')
   assert.ok(xml.includes('<movie>'))
   assert.ok(!xml.includes('OLD'))
@@ -55,6 +55,7 @@ test('Settings 中 generateNfo / skipExistingNfo 字段被正确使用', () => {
     downloadHdCover: true,
     downloadSamples: false,
     downloadActorAvatars: false,
+    actorAvatarPlatform: 'Kodi',
     generateNfo: true,
     skipExistingNfo: true,
     folderNaming: 'number',

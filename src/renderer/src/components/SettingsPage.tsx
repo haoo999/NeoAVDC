@@ -4,6 +4,7 @@ import {
   CROP_MODES,
   FOLDER_NAMING_MODES,
   ORGANIZE_MODES,
+  type ActorAvatarPlatform,
   type CropMode,
   type FolderNamingMode,
   type OrganizeMode,
@@ -25,6 +26,30 @@ const CROP_LABELS: Record<CropMode, string> = {
 const ORGANIZE_LABELS: Record<OrganizeMode, string> = {
   inPlace: '就地收纳（视频所在目录）',
   central: '统一收纳到指定目录'
+}
+
+const AVATAR_PLATFORM_GROUPS: {
+  id: 'local' | 'infuse'
+  label: string
+  hint: string
+  platforms: ActorAvatarPlatform[]
+}[] = [
+  {
+    id: 'local',
+    label: '本地头像（.actors 子目录）',
+    hint: '头像下载到 .actors/ 子目录，NFO 写本地相对路径；Kodi / Emby / Jellyfin / Plex 互通兼容',
+    platforms: ['Kodi', 'Emby', 'Jellyfin', 'Plex']
+  },
+  {
+    id: 'infuse',
+    label: 'Infuse（DMM 远程地址）',
+    hint: '不下载本地文件、不建 .actors 目录，NFO 写 DMM 无防盗链远程地址；DMM 覆盖不到的演员不显示头像。与上一组不兼容',
+    platforms: ['Infuse']
+  }
+]
+
+function avatarGroupOf(platform: ActorAvatarPlatform): 'local' | 'infuse' {
+  return AVATAR_PLATFORM_GROUPS.find((g) => g.platforms.includes(platform))?.id ?? 'local'
 }
 
 const SITE_SUFFIX: Partial<Record<(typeof SITE_IDS)[number], string>> = {
@@ -98,7 +123,7 @@ export default function SettingsPage() {
               <div>
                 <div className="label">启用站点</div>
                 <span className="hint">
-                  元数据按顺序回退；DMM 仅作图片 CDN，在其他源取不到封面/样张时兜底
+                  元数据按顺序回退；HEYZO / FC2 番号按类型自动路由到官方源，无需勾选；DMM 仅作图片 CDN 兜底
                 </span>
               </div>
               <div className="set-control">
@@ -300,7 +325,7 @@ export default function SettingsPage() {
             <div className="set-row">
               <div>
                 <div className="label">下载样张剧照</div>
-                <span className="hint">写入 -extrafanart 目录，Kodi 可浏览</span>
+                <span className="hint">写入 extrafanart/fanartN.jpg（Kodi/Infuse 标准样张目录）</span>
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
@@ -336,7 +361,13 @@ export default function SettingsPage() {
             <div className="set-row">
               <div>
                 <div className="label">下载演员头像</div>
-                <span className="hint">写入 actor thumb，Emby 可用</span>
+                <span className="hint">
+                  {settings.downloadActorAvatars
+                    ? AVATAR_PLATFORM_GROUPS.find(
+                        (g) => g.id === avatarGroupOf(settings.actorAvatarPlatform)
+                      )?.hint
+                    : '按目标媒体平台决定头像存放方式'}
+                </span>
               </div>
               <div className="set-control switch-row">
                 <label className="switch">
@@ -349,6 +380,42 @@ export default function SettingsPage() {
                 </label>
               </div>
             </div>
+            {settings.downloadActorAvatars && (
+              <div className="set-row">
+                <div>
+                  <div className="label">目标媒体平台</div>
+                  <span className="hint">
+                    同一组内平台互通；两组存储策略冲突，只能选其一
+                  </span>
+                </div>
+                <div className="set-control fill avatar-platform-groups">
+                  {AVATAR_PLATFORM_GROUPS.map((group) => {
+                    const selected = avatarGroupOf(settings.actorAvatarPlatform) === group.id
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        className={`avatar-group${selected ? ' on' : ''}`}
+                        aria-pressed={selected}
+                        onClick={() => commit({ actorAvatarPlatform: group.platforms[0] })}
+                      >
+                        <div className="avatar-group-title">{group.label}</div>
+                        <div className="avatar-group-options">
+                          {group.platforms.map((p) => (
+                            <span
+                              key={p}
+                              className={`avatar-opt${selected ? ' on' : ''}`}
+                            >
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="set-row">
               <div>
                 <div className="label">已存在 .nfo 时跳过</div>

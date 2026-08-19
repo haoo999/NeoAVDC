@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import path from 'node:path'
-import os from 'node:os'
 import {
   actorThumbPath,
+  actorThumbRef,
   buildFolderName,
   buildMediaPaths,
   extraThumbPath,
   inferExtension,
+  isFlattenedActorFile,
   isInsideOrganizedFolder,
   posterPath,
   fanartPath,
@@ -32,8 +33,10 @@ test('buildMediaPaths 基于视频路径生成媒体路径', () => {
   assert.equal(p.dir, '/movies/abc')
   assert.equal(p.baseName, 'SSIS-001')
   assert.equal(p.nfoPath, path.join('/movies/abc', 'SSIS-001.nfo'))
-  assert.equal(p.extraThumbsDir, path.join('/movies/abc', 'SSIS-001-extrafanart'))
-  assert.equal(p.actorsDir, path.join('/movies/abc', '.actors'))
+  assert.equal(p.posterPath, path.join('/movies/abc', 'SSIS-001-poster.jpg'))
+  assert.equal(p.fanartPath, path.join('/movies/abc', 'SSIS-001-fanart.jpg'))
+  // 样张走标准 Kodi/Infuse 子目录 extrafanart/
+  assert.equal(p.extraThumbsDir, path.join('/movies/abc', 'extrafanart'))
 })
 
 test('posterPath / fanartPath 使用传入扩展名', () => {
@@ -41,11 +44,41 @@ test('posterPath / fanartPath 使用传入扩展名', () => {
   assert.equal(fanartPath('/d', 'AB', '.webp'), path.join('/d', 'AB-fanart.webp'))
 })
 
-test('actorThumbPath / extraThumbPath 命名规范', () => {
-  const actorsDir = path.join(os.tmpdir(), 'actors')
-  assert.equal(actorThumbPath(actorsDir, '葵 つかさ'), path.join(actorsDir, '葵 つかさ.jpg'))
-  assert.equal(extraThumbPath(path.join(os.tmpdir(), 'ext'), 0, '.jpg'), path.join(os.tmpdir(), 'ext', 'thumb001.jpg'))
-  assert.equal(extraThumbPath(path.join(os.tmpdir(), 'ext'), 9, '.png'), path.join(os.tmpdir(), 'ext', 'thumb010.png'))
+test('actorThumbPath 按平台区分存储：Kodi 用 .actors/ 子目录，Infuse 平铺', () => {
+  const dir = '/movies/abc'
+  assert.equal(
+    actorThumbPath(dir, '葵 つかさ', '.jpg', 'Kodi'),
+    path.join(dir, '.actors', '葵 つかさ.jpg')
+  )
+  assert.equal(
+    actorThumbPath(dir, '葵 つかさ', '.jpg', 'Infuse'),
+    path.join(dir, 'actor-葵 つかさ.jpg')
+  )
+  // Emby/Jellyfin/Plex 与 Kodi 同属 .actors/ 家族
+  assert.equal(
+    actorThumbPath(dir, '葵 つかさ', '.png', 'Jellyfin'),
+    path.join(dir, '.actors', '葵 つかさ.png')
+  )
+})
+
+test('actorThumbRef 按平台返回本地相对路径或远程 URL', () => {
+  assert.equal(actorThumbRef('葵', '.jpg', 'Kodi'), path.posix.join('.actors', '葵.jpg'))
+  assert.equal(actorThumbRef('葵', '.jpg', 'Infuse', 'https://x/aoi.jpg'), 'https://x/aoi.jpg')
+  // Infuse 未查到远程 URL 时返回 undefined，NFO 不写 thumb
+  assert.equal(actorThumbRef('葵', '.jpg', 'Infuse'), undefined)
+})
+
+test('extraThumbPath 使用 Kodi/Infuse 标准 fanartNN 命名并落到 extrafanart 目录', () => {
+  const dir = path.join('/movies/abc', 'extrafanart')
+  assert.equal(extraThumbPath(dir, 0, '.jpg'), path.join(dir, 'fanart1.jpg'))
+  assert.equal(extraThumbPath(dir, 9, '.png'), path.join(dir, 'fanart10.png'))
+})
+
+test('isFlattenedActorFile 识别平铺演员头像', () => {
+  assert.equal(isFlattenedActorFile('actor-葵 つかさ.jpg'), true)
+  assert.equal(isFlattenedActorFile('actor-X.png'), true)
+  assert.equal(isFlattenedActorFile('SSIS-001-poster.jpg'), false)
+  assert.equal(isFlattenedActorFile('fanart1.jpg'), false)
 })
 
 test('buildFolderName 按命名模式生成文件夹名', () => {

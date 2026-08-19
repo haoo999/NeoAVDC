@@ -1,236 +1,123 @@
 # NeoAVDC
 
-> 基于 Electron + React + TypeScript 的 AVDC 重构版，面向本地影片元数据刮削与媒体库整理。
+本地运行的 AV 元数据刮削器：从文件名识别番号、抓取元数据、下载图片、裁切海报、生成 [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) 并把视频原地整理成带海报的资料夹。图形界面，数据全部保存在本地，不上传任何内容。
 
-[![Status](https://img.shields.io/badge/status-stage%203%20in%20progress-blue.svg?style=flat-square)](#)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg?style=flat-square)](#)
-[![Electron](https://img.shields.io/badge/Electron-33-47848F.svg?style=flat-square&logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square&logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+> 重构自旧的 Python/PyQt5 版 AVDC。当前阶段：刮削 / 图片 / NFO / 多数据源 / 工具页已落地，软链接、番号识别容错等救援能力在 Roadmap 上继续推进。
 
----
+## 功能
 
-## 目录
+- 番号识别：有码、无码、FC2、HEYZO、欧美（CDN/光盘编号）、`cdN` 多碟、`-C` 中文字幕、多位数字、`_`/空格分隔等变体。
+- 多数据源按番号类型自动路由：
+  - **JavBus / JavDB / Jav321**：常规有码番号，按设置启用与顺序依次尝试。
+  - **HEYZO / FC2**：专用源，对不匹配番号零网络开销直接跳过；始终启用、固定排在最前，不占用设置页开关。
+  - **DMM**：仅作图片 CDN 兜底（高清封面回退），不是元数据源。
+- 图片：封面、样张、女优头像。DMM 高清封面 → 缩略图自动回退；按魔术字节识别真实类型，不信任 URL 后缀。
+- 海报裁切：横版包装盒封面 → 2:3 竖海报，支持 `right`（默认）/`center`/`full` 三种模式。
+  - `right` 基于真实封面几何（实测 DMM/JavBus 800×538 封面书脊折痕约在全宽 52.5%，正面宽高比 ≈0.71，略宽于 2:3）：先取右半正面，再在其中居中取 2:3，保留靠近书脊的一小段正面，避免旧逻辑从右边缘硬切导致的正面缺失。裁切规则对落盘海报、番号速查、裁切预览全局一致。
+- 去水印：对海报右上角常见的半透明 logo 做模糊遮挡（可开关）。
+- NFO：Kodi movie 格式，含标题、番组、演员（仅保留女优）、发行日期、时长、简介等；可配置跳过已存在的 NFO。
+- 演员头像：
+  - 演员列表按性别过滤，仅保留女优（JavDB 按 ♀/♂、Jav321/JavBus 按 `/star/` vs `/male/` 路径区分）。
+  - 头像按演员名落盘、跨作品复用，已存在则跳过下载。
+  - 支持目标平台选择：`Kodi/Emby/Jellyfin/Plex` 使用 `.actors/` 子目录 + NFO 本地相对路径；`Infuse` 不读本地头像，NFO 写 DMM 无防盗链远程 URL。
+- 收纳：刮削后把视频及同名字幕等附属文件原地移动到番号子文件夹；支持统一收纳根目录（`centralLibraryDir`，视频移入指定根目录下番号子文件夹）、跨卷移动回退。
+- 详情面板：展示任务状态与元数据，支持就地手动修正番号（番号旁编辑按钮），以新番号重新刮削并记录手动标记；支持单任务重新刮削。
+- 工具页：
+  - **番号速查**：输入番号后并行查询各数据源，实时显示每个渠道的命中/未命中/错误状态与封面预览（封面跟随全局裁切模式）。
+  - **海报裁切**：按番号抓取封面，并排预览 right/center/full 三种裁切，可单独导出。
+  - **封面扫描**：扫描资料夹中缺失封面的视频。
+  - **演员头像回填**：为已有作品批量回填女优头像。
+- 主进程图片代理：远程图片按 CDN 自适应 Referer 绕过防盗链（如 aventertainments 带外站 Referer 会 403 则不发、DMM 带 dmm.co.jp、其余回退来源页），本地 `file://` 直接读盘回传 data URL。
+- 统一时间线活动行日志：下载各阶段原位刷新、结束提交为日志、底栏常驻活动位。
+- 持久化设置：刮削源、代理、请求间隔、命名/收纳/裁切模式、图片与 NFO 开关等，保存在 Electron `userData` 下的 JSON。
+- 深色 / 浅色主题，遵循内部设计系统（Anthropic 色板：强调色 clay，状态色 olive/fig/sky/kraft）。
 
-- [1. 简介](#1-简介)
-- [2. 当前状态](#2-当前状态)
-- [3. 技术栈](#3-技术栈)
-- [4. 快速开始](#4-快速开始)
-- [5. 目录结构](#5-目录结构)
-- [6. 可用脚本](#6-可用脚本)
-- [7. Roadmap](#7-roadmap)
-- [8. 设计系统](#8-设计系统)
-- [9. 致谢](#9-致谢)
-- [10. 申明](#10-申明)
+## 技术栈
 
----
+- Electron 33、electron-vite 2、React 18、TypeScript 5（strict）
+- 图像处理：[sharp](https://sharp.pkg.io)（原生依赖，裁切/去水印）
+- 测试：Node 20+ 内置 `node:test`（无 Jest/Vitest）
+- 无 UI 库、无 CSS 框架、无状态管理库；样式集中在 `src/renderer/src/styles.css`
 
-## 1. 简介
+## 目录结构
 
-**NeoAVDC** 是对旧版 Python / PyQt5 桌面应用 [AVDC](https://github.com/moyy996/AVDC) 的现代化重写。目标是延续 AVDC 在本地影片元数据抓取、分类整理、NFO 生成等方面的能力，并提供一套更干净、更易维护、跨平台体验更一致的桌面端实现。
+```
+src/
+├── main/                      # Electron 主进程
+│   ├── index.ts               # 生命周期、窗口
+│   ├── engine.ts              # 刮削任务调度
+│   ├── ipc.ts                 # IPC 通道
+│   ├── number/                # 番号识别（纯函数 + 测试）
+│   ├── io/                    # 文件扫描
+│   ├── net/                   # HTTP 客户端（gzip/br、代理）
+│   ├── scrapers/              # 刮削源
+│   │   ├── types.ts           # ScraperSource / ScrapedMetadata 接口
+│   │   ├── index.ts           # 数据源注册与按设置/番号类型选择
+│   │   ├── javbus/
+│   │   ├── javdb/
+│   │   ├── jav321/
+│   │   ├── heyzo/
+│   │   └── fc2/
+│   ├── media/                 # 图片下载 / sharp 裁切 / NFO / 收纳
+│   │   ├── dmmCdn.ts          # DMM 封面/头像推导与 URL 升级
+│   │   ├── dmmActress.ts      # DMM 女优列表页抓取（Infuse 远程头像）
+│   │   ├── imageDownloader.ts # 封面/样张/头像下载、Referer 自适应
+│   │   ├── imageProcessor.ts  # sharp 2:3 裁切 + 去水印
+│   │   ├── organizeMedia.ts   # 刮削后原地收纳
+│   │   ├── writeMedia.ts      # 媒体产物落盘编排
+│   │   ├── nfoWriter.ts       # Kodi NFO
+│   │   ├── readImage.ts       # 主进程图片代理
+│   │   └── fileNames.ts       # 海报/NFO/头像命名
+│   ├── tools/                 # 工具页逻辑（速查/裁切/扫描/头像回填）
+│   └── store/                 # userData 设置读写与清洗
+├── preload/index.ts           # contextBridge 暴露给渲染进程
+├── renderer/src/              # React UI
+│   ├── components/            # TopBar / DropZone / TaskList / DetailPanel
+│   │                          # LogDrawer / SettingsPage / ToolsPage
+│   ├── styles.css
+│   ├── theme.ts
+│   └── useImageSource.ts      # 经 IPC 加载图片为 data URL
+└── shared/                    # 主/渲染共享类型与通道常量
+    ├── channels.ts            # IPC 通道名
+    ├── settings.ts
+    └── types/
+```
 
-应用最终将配合 Emby / Kodi / Plex 等本地媒体库软件使用：扫描本地视频目录 → 识别番号 → 从多个数据源抓取元数据与封面 → 按命名规则重命名并输出 → 写入 NFO，供媒体库直接识别。
-
-> 本项目**不提供任何影片下载地址或资源线索**，仅用于本地已有文件的整理与元数据补全。
-
-## 2. 当前状态
-
-项目处于 **阶段 3 — 失败救援**，阶段 1、2 已完成并通过真实番号端到端验证；阶段 3 的部分能力（原地收纳、海报裁切策略对齐、活动行日志）已落地：
-
-- 主界面、任务列表、详情面板、日志抽屉、设置页、工具页的视觉结构已搭建完成，明暗主题与毛玻璃抽屉已多轮打磨。
-- 设置项（刮削源、代理、请求间隔、命名规则、海报裁切、样张/头像下载、NFO、文件夹收纳等）已通过 `userData` 下的 JSON 持久化，IPC 通道全链路打通。
-- 已接入五个数据源：JavBus、JavDB、Jav321、FC2、Heyzo。HEYZO / FC2 作为专用源优先匹配（不匹配番号零网络开销直接跳过），其余通用源按启用顺序兜底；JavBus 对有码/无码路径与 404 搜索均有回退。
-- 演员只保留女优：JavDB 按性别符号、Jav321/JavBus 按链接路径（`/star/` vs `/male/`）区分，男优不进入元数据、不下载头像、不写入 NFO。
-- 刮削成功后**原地收纳**为番号子文件夹（支持纯番号 / 番号+标题 / 番号+演员+标题三种命名，可另选统一收纳根目录），可跟随移动同名外挂字幕（含 `.zh` 等语言后缀），已在收纳文件夹内则不套娃。
-- 媒体产物已落地：海报（sharp 裁切为 2:3 竖版，裁切位置可设为右半边正面封面 / 居中 / 完整，可叠加左上角去水印模糊）、fanart、样张剧照（extrafanart）、演员头像（.actors）与 Kodi/Emby/Jellyfin 兼容的 `.nfo`。
-- 演员头像按演员名存放在 `.actors/`，**跨作品复用**：同名演员已有头像时直接跳过下载，避免重复请求与覆盖。
-- 海报裁切策略与详情预览联动：经确认无高清竖版海报可直接抓取，统一由横版 fanart 裁切，默认取右半边（光盘正面封面）；详情面板远程封面预览跟随同一设置，本地成品海报落盘后自动切换。
-- 详情面板支持**就地手动修正番号**（番号旁的编辑按钮），回车/确定后以新番号重新刮削，NFO 内记录 `numext`/手动标记。
-- 渲染端图片全部经主进程 IPC 代理读取（远程封面补 Referer、本地文件走 `file://` 读取后回传 data URL），规避防盗链与 dev 跨域。
-- 日志抽屉采用统一时间线：下载各阶段（封面 / 样张 / 头像）以活动行原位刷新，阶段结束提交为日志行；底栏常驻当前活动信息。
-- HTTP 客户端支持 gzip/deflate/br 解压、超时、按设置的请求间隔限流与二进制缓冲；图片下载含魔术字节识别、HD 封面失败回退缩略图与 DMM CDN 兜底、原子写入。
-
-后续为失败救援剩余项（软链接、番号识别容错、单文件重刮、更多数据源）、工具页补齐与打包，进度见 [Roadmap](#7-roadmap)。
-
-## 3. 技术栈
-
-| 分层 | 选型 |
-| --- | --- |
-| 壳 | Electron 33 |
-| 构建 | electron-vite 2 + Vite 5 |
-| UI | React 18 + TypeScript 5（strict） |
-| 样式 | 原生 CSS（CSS 变量主题，无 UI/CSS 框架） |
-| 进程通信 | contextBridge + 类型化 IPC（`src/shared/channels.ts`） |
-| 图像处理 | sharp（海报裁切、去水印模糊、JPEG 重编码） |
-| 包管理 | npm |
-
-刻意保持依赖精简：没有引入 Redux/Zustand、Tailwind、Ant Design 等，UI 全部由组件 + `styles.css` 构建。
-
-## 4. 快速开始
-
-### 4.1 环境要求
-
-- Node.js 18+（建议 20 LTS）
-- npm 10+
-- macOS / Windows / Linux 均可开发；打包产物以当前宿主平台为准
-
-### 4.2 安装与运行
+## 开发
 
 ```bash
-# 1. 克隆仓库
-git clone <your-fork-url> NeoAVDC
-cd NeoAVDC
-
-# 2. 安装依赖
 npm install
-
-# 3. 启动开发环境
-npm run dev
+npm run dev      # electron-vite dev，渲染端 localhost:5173，主进程带 9229 调试端口
+npm run build    # 构建到 out/
+npm test         # 用 tsc 编译测试到 out-test/ 后跑 node:test，跑完清理
 ```
 
-`npm run dev` 会并行启动：
-
-- Electron 主进程（带热重载）
-- Renderer 开发服务器：<http://localhost:5173>（HMR 实时生效）
-
-开发模式下主进程会显式开启 `remote-debugging-port=9229`，可通过 Chrome DevTools Protocol 连接，用于自动化截图 / 调试。
-
-### 4.3 类型检查与测试
+TypeScript 为双配置类型检查：
 
 ```bash
-npm run typecheck   # 全量类型检查（主/preload 与 renderer 两个 tsconfig）
-npm test            # 用 node:test 跑 *.test.ts（零额外依赖，需要 Node 20+）
+npm run typecheck
 ```
 
-`typecheck` 会分别对主进程/preload（`tsconfig.node.json`）与渲染进程（`tsconfig.json`）执行 `tsc --noEmit`；`npm test` 先用 `tsconfig.test.json` 把测试文件编译到临时 `out-test/`（CommonJS），再用 Node 内置的 `node --test` 执行，跑完自动清理。提交或交付前请确保两者均通过。
+约束：
 
-## 5. 目录结构
+- 渲染进程不直接访问 Node API，系统能力统一经 `preload` 通过 contextBridge 暴露；`contextIsolation: true`、`nodeIntegration: false`。
+- 通道名只从 `shared/channels.ts` 的 `IPC` 常量取。
+- 测试只用 `node:test` + `node:assert/strict`，测试文件与源码同目录、命名 `*.test.ts`。
 
-```
-NeoAVDC/
-├── src/
-│   ├── main/                # Electron 主进程
-│   │   ├── index.ts         # app 生命周期 & BrowserWindow（含 9229 调试端口）
-│   │   ├── engine.ts        # 刮削任务调度器，持有窗口引用并推送事件
-│   │   ├── ipc.ts           # IPC 通道注册 & will-quit 清理
-│   │   ├── number/
-│   │   │   ├── parseNumber.ts       # 番号识别纯函数（有码/无码/FC2/HEYZO 等）
-│   │   │   └── parseNumber.test.ts
-│   │   ├── io/
-│   │   │   └── collectFiles.ts      # 递归收集视频文件
-│   │   ├── net/
-│   │   │   ├── httpClient.ts        # HTTP 客户端（gzip/br、超时、缓冲）
-│   │   │   └── httpClient.test.ts
-│   │   ├── scrapers/
-│   │   │   ├── types.ts             # ScraperSource / ScrapedMetadata 接口
-│   │   │   ├── index.ts             # 数据源注册与按番号类型选择
-│   │   │   ├── javbus/              # JavBus 详情/搜索/有码无码/404 回退
-│   │   │   ├── javdb/               # JavDB 详情/搜索（按 ♀/♂ 区分演员）
-│   │   │   ├── jav321/              # Jav321 详情/搜索
-│   │   │   ├── fc2/                 # FC2-PPV 专用源（详情 + 标签 API）
-│   │   │   ├── heyzo/               # HEYZO 专用源
-│   │   │   └── *.test.ts
-│   │   ├── media/
-│   │   │   ├── fileNames.ts         # poster/fanart/nfo/actors 命名 & 文件夹命名
-│   │   │   ├── imageDownloader.ts   # 封面/样张/头像下载与回退
-│   │   │   ├── imageProcessor.ts    # sharp 海报裁切（右半边/居中/完整）/ 去水印
-│   │   │   ├── nfoWriter.ts         # Kodi movie NFO 生成
-│   │   │   ├── organizeMedia.ts     # 刮削后原地收纳为番号子文件夹
-│   │   │   ├── readImage.ts         # 主进程图片代理（远程补 Referer / 本地读盘）
-│   │   │   ├── writeMedia.ts        # 媒体产物落盘编排
-│   │   │   └── *.test.ts
-│   │   └── store/
-│   │       ├── sanitizeSettings.ts  # 设置持久化清洗
-│   │       └── settingsStore.ts     # userData JSON 读写封装
-│   ├── preload/
-│   │   └── index.ts         # contextBridge 暴露给渲染端的 API
-│   ├── renderer/
-│   │   ├── index.html
-│   │   └── src/
-│   │       ├── App.tsx
-│   │       ├── main.tsx
-│   │       ├── theme.ts     # 主题切换
-│   │       ├── status.ts    # 状态语义映射
-│   │       ├── useImageSource.ts  # 经 IPC 加载图片为 data URL 的 Hook
-│   │       ├── styles.css   # 全局样式（唯一样式入口）
-│   │       └── components/  # TopBar / DropZone / TaskList /
-│   │                        # DetailPanel / LogDrawer /
-│   │                        # SettingsPage / ToolsPage
-│   └── shared/
-│       ├── settings.ts      # 默认设置
-│       ├── channels.ts      # IPC 通道名常量与类型
-│       └── types/           # 主/渲共享类型（settings、scrape 等）
-├── anthropic-design-system.md   # 设计系统权威文档
-├── electron.vite.config.ts
-├── tsconfig.json
-├── tsconfig.node.json
-└── tsconfig.test.json          # 测试编译配置（CommonJS → out-test/）
-```
+## 设置项
 
-## 6. 可用脚本
+- **刮削源**：JavBus / JavDB / Jav321 可开关并排序；HEYZO / FC2 按番号类型自动路由、始终启用。
+- **代理**：HTTP/HTTPS 代理 URL（留空直连）。
+- **请求间隔**：每次请求后的礼貌延迟（秒）。
+- **命名规则**：`number` / `numberTitle` / `numberActorTitle`。
+- **收纳模式**：原地收纳为番号子文件夹，或统一移入指定收纳根目录。
+- **裁切模式**：`right`（默认，正面封面）/ `center` / `full`。
+- **去水印**：海报右上角 logo 模糊遮挡开关。
+- **下载样张 / 生成 NFO / 跳过已存在 NFO / 下载演员头像**。
+- **演员头像目标平台**：Kodi/Emby/Jellyfin/Plex（本地 `.actors/`）或 Infuse（远程 URL）。
 
-| 命令 | 说明 |
-| --- | --- |
-| `npm run dev` | 以开发模式启动 Electron（主进程 + renderer HMR） |
-| `npm run build` | 构建生产产物到 `out/`（main / preload / renderer） |
-| `npm run preview` | 使用 electron-vite 预览构建产物 |
-| `npm run typecheck` | 双 tsconfig 全量类型检查 |
-| `npm test` | 基于内置 `node:test` 跑单元测试（零额外依赖，Node 20+） |
+## Roadmap
 
-> 仓库没有配置 lint / format 脚本，请勿假定存在 `npm run lint` 等命令。测试使用 Node 内置 runner，不依赖 jest / vitest / mocha。
-
-## 7. Roadmap
-
-按以下顺序推进，每个阶段完成后才进入下一阶段：
-
-1. ✅ **阶段 1 — 引擎接入与持久化**
-   - 刮削源选择、代理、命名规则等设置项的持久化（`userData` JSON store）
-   - IPC 通道打通：`settings:get/set`、`scrape:start` 等
-   - 主进程 `Engine` 从占位演进为真实任务调度器
-2. ✅ **阶段 2 — 核心刮削能力**
-   - 番号识别、JavBus 数据源抓取（有码/无码/搜索回退）
-   - 图片下载：海报（HD→缩略图回退）、fanart、样张剧照、演员头像
-   - sharp 海报裁切为 2:3 竖版、去水印模糊、JPEG 重编码
-   - Kodi/Emby/Jellyfin 兼容的 NFO 文件生成
-   - 已通过真实番号端到端验证
-3. **阶段 3 — 失败救援（进行中）**
-   - ✅ 原地收纳：刮削成功后建立番号子文件夹并移入视频及同名外挂字幕（可另选统一收纳根目录）
-   - ✅ 海报裁切策略对齐：默认右半边正面封面，预览与落盘一致
-   - ✅ 多数据源接入：JavBus / JavDB / Jav321 / FC2 / Heyzo，按番号类型路由
-   - ✅ 详情面板就地手动修正番号后重新刮削
-   - ✅ 演员去重优化：仅保留女优，演员头像跨作品复用
-   - 🔲 软链接模式
-   - 🔲 番号识别容错、单文件重刮削
-   - 🔲 更多数据源接入
-4. **阶段 4 — 工具页与打包**
-   - 工具页功能（视频整理、封面裁剪等）
-   - 基于 electron-builder 的安装包产出（macOS / Windows）
-
-## 8. 设计系统
-
-UI 风格参照 Anthropic 官网视觉语言，落地细节记录在根目录 [`anthropic-design-system.md`](./anthropic-design-system.md) 中。核心约定：
-
-- 强调色固定为 clay `#d97757`，仅用于 CTA / 品牌 / 高优先级指示，不参与状态语义。
-- 状态色采用官方语义色板：olive（成功）/ fig（错误）/ sky（运行中）/ kraft（等待）。
-- 圆角 token 仅 `--radius-s (4px)` / `--radius (8px)` / `--radius-l (16px)`。
-- 深浅色主题通过 `[data-theme]` 切换，所有颜色走 CSS 变量。
-
-改动任何样式前请先阅读 `anthropic-design-system.md`，并遵循其中的硬约束。
-
-## 9. 致谢
-
-- 原版 AVDC（Python / PyQt5 GUI 版）：[moyy996/AVDC](https://github.com/moyy996/AVDC)
-- AVDC 的命令行前身：[yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture)
-
-感谢原作者与社区在元数据刮削领域的探索与积累。NeoAVDC 在功能形态上向它们致敬，但代码与 UI 全部重新实现。
-
-## 10. 申明
-
-查阅、下载或运行本项目源代码 / 二进制，即视为你理解并接受：
-
-- 本软件仅供技术交流与学术学习使用。
-- 本软件**不提供任何影片下载地址或资源线索**，仅用于本地已有文件的整理。
-- 请勿在热门社交平台宣传本项目。
-- 请在使用前确认你所在地区的法律法规；因使用本软件产生的任何法律责任由使用者自行承担。
-- 严禁将本软件用于商业用途或任何违反当地法律的目的。
-- 原命令行项目作者 yoshiko2 保留对原版项目的最终解释权；NeoAVDC 作为独立重写项目，问题与反馈请提交到本仓库 Issue。
+- 软链接模式
+- 番号识别容错、单文件重刮
+- electron-builder 打包发布

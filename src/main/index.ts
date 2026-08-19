@@ -3,6 +3,7 @@ import path from 'node:path'
 import { Engine } from './engine'
 import { registerIpc } from './ipc'
 import { SettingsStore } from './store/settingsStore'
+import { ToolRunner } from './tools/toolRunner'
 
 app.commandLine.appendSwitch('no-sandbox')
 if (process.env['ELECTRON_RENDERER_URL']) {
@@ -11,6 +12,8 @@ if (process.env['ELECTRON_RENDERER_URL']) {
 
 const settingsStore = new SettingsStore()
 const engine = new Engine(settingsStore)
+const tools = new ToolRunner(settingsStore)
+let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -30,8 +33,13 @@ function createWindow(): void {
     }
   })
 
+  mainWindow = win
   win.once('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
   engine.attach(win)
+  tools.attach(win)
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -41,7 +49,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpc(engine, settingsStore)
+  registerIpc(engine, settingsStore, tools, () => mainWindow)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

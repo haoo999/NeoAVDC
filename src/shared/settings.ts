@@ -1,7 +1,7 @@
 import type { Settings } from './types/settings'
 
 export const DEFAULT_SETTINGS: Settings = {
-  enabledSites: ['Heyzo', 'FC2', 'JavBus', 'JavDB', 'Jav321'],
+  enabledSites: ['JavBus', 'JavDB', 'Jav321'],
   proxyUrl: '',
   requestIntervalSec: 2,
   folderNaming: 'number',
@@ -14,5 +14,6 @@ export const DEFAULT_SETTINGS: Settings = {
   downloadSamples: false,
   generateNfo: true,
   downloadActorAvatars: false,
+  actorAvatarPlatform: 'Kodi',
   skipExistingNfo: true
 }

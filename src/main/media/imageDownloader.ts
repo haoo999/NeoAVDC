@@ -1,18 +1,22 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { CropMode, ScrapedMetadata } from '../../shared/types'
+import type { ActorAvatarPlatform, CropMode, ScrapedMetadata } from '../../shared/types'
 import type { HttpClient } from '../net/httpClient'
 import type { ParsedName } from '../number/parseNumber'
 import {
   actorThumbPath,
+  actorThumbRef,
   buildMediaPaths,
   extraThumbPath,
   fanartPath,
   inferExtension,
-  posterPath
+  posterPath,
+  sanitizeFileName,
+  usesActorsDir
 } from './fileNames'
 import { processPoster, removeWatermark } from './imageProcessor'
 import { DMM_REFERER, dmmCoverUrls, dmmSampleGroups } from './dmmCdn'
+import { findDmmActressAvatar, type DmmPageFetcher } from './dmmActress'
 
 export type DownloadStage = 'cover' | 'sample' | 'actor'
 
@@ -32,6 +36,7 @@ export type ProgressCallback = (progress: DownloadProgress) => void
 export interface ImageDownloadOptions {
   downloadHdCover: boolean
   downloadActorAvatars: boolean
+  actorAvatarPlatform: ActorAvatarPlatform
   downloadSamples: boolean
   cropMode: CropMode
   removeWatermark: boolean
@@ -48,6 +53,8 @@ export interface ImageDownloadResult {
   fanart: string | null
   samples: string[]
   actors: string[]
+  // 演员名 → NFO <thumb> 引用（本地相对路径或远程 URL），交给 nfoWriter
+  actorThumbs: Map<string, string>
 }
 
 export type BinaryGetter = (
@@ -72,23 +79,32 @@ export function fileExists(targetPath: string): boolean {
 
 const ACTOR_AVATAR_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
 
-function findExistingActorAvatar(actorsDir: string, actorName: string): string | null {
-  // 头像扩展名在下载前未知（由响应魔术字节判定），
-  // 因此按演员名依次探测常见扩展名，命中任意一个即视为已下载，直接复用。
-  const safe = path.basename(actorThumbPath(actorsDir, actorName, ''))
+// 在视频所在目录里按演员名探测已存在头像文件。
+// - .actors/ 平台：在 .actors/{name}.* 里找（跨作品复用）
+// - Infuse：平铺 actor-{name}.*（Infuse 兼容模式，理论上不落盘，仅作回收）
+// 头像扩展名在下载前未知（由响应魔术字节判定），因此按演员名依次探测常见扩展名。
+function findExistingActorAvatar(
+  dir: string,
+  actorName: string,
+  platform: ActorAvatarPlatform
+): string | null {
+  const safe = sanitizeFileName(actorName)
+  // .actors/ 平台查找 {safe}.*；Infuse 平铺查找 actor-{safe}.*
+  const fileStem = usesActorsDir(platform) ? safe : `actor-${safe}`
+  const probeDir = usesActorsDir(platform) ? path.join(dir, '.actors') : dir
   try {
-    for (const file of fs.readdirSync(actorsDir)) {
+    for (const file of fs.readdirSync(probeDir)) {
       const parsed = path.parse(file)
       if (
-        parsed.name === safe &&
+        parsed.name === fileStem &&
         ACTOR_AVATAR_EXTS.includes(parsed.ext.toLowerCase()) &&
-        fs.statSync(path.join(actorsDir, file)).isFile()
+        fs.statSync(path.join(probeDir, file)).isFile()
       ) {
-        return path.join(actorsDir, file)
+        return path.join(probeDir, file)
       }
     }
   } catch {
-    // actors 目录尚不存在，等同于没有已存头像
+    // 目录尚不存在，等同于没有已存头像
   }
   return null
 }
@@ -199,11 +215,18 @@ export async function downloadImages(
   getBinary: BinaryGetter,
   videoFilePath: string,
   data: ScrapedMetadata,
-  options: ImageDownloadOptions
+  options: ImageDownloadOptions,
+  httpForDmm?: DmmPageFetcher
 ): Promise<ImageDownloadResult> {
   const paths = buildMediaPaths(videoFilePath)
   const referer = new URL(data.sourceUrl).origin + '/'
-  const result: ImageDownloadResult = { poster: null, fanart: null, samples: [], actors: [] }
+  const result: ImageDownloadResult = {
+    poster: null,
+    fanart: null,
+    samples: [],
+    actors: [],
+    actorThumbs: new Map()
+  }
   const report = (progress: DownloadProgress): void => options.onProgress?.(progress)
 
   // DMM CDN 只在被勾选时作为图片兜底；它只对有码字母数字番号有意义
@@ -248,6 +271,9 @@ export async function downloadImages(
   })
 
   if (options.downloadSamples) {
+    if (data.sampleUrls.length > 0 || dmmSamples.length > 0) {
+      fs.mkdirSync(paths.extraThumbsDir, { recursive: true })
+    }
     if (data.sampleUrls.length > 0) {
       for (let i = 0; i < data.sampleUrls.length; i++) {
         const url = data.sampleUrls[i]
@@ -307,32 +333,49 @@ export async function downloadImages(
   }
 
   if (options.downloadActorAvatars) {
+    const platform = options.actorAvatarPlatform
+    const local = usesActorsDir(platform)
+    // total：本地模式统计有 avatarUrl 的演员；Infuse 模式所有演员都尝试查 DMM
+    const total = local ? data.actors.filter((a) => a.avatarUrl).length : data.actors.length
     let idx = 0
-    const total = data.actors.filter((a) => a.avatarUrl).length
     for (const actor of data.actors) {
-      if (!actor.avatarUrl) continue
       idx += 1
-      // 已存在同名头像（任意常见扩展名）则直接复用，避免重复下载覆盖
-      const existing = findExistingActorAvatar(paths.actorsDir, actor.name)
-      if (existing) {
+      if (local) {
+        if (!actor.avatarUrl) continue
+        // 已存在同名头像（任意常见扩展名）则直接复用，跨作品共享
+        const existing = findExistingActorAvatar(paths.dir, actor.name, platform)
+        if (existing) {
+          report({ stage: 'actor', index: idx, total, label: actor.name })
+          const ext = path.extname(existing) || '.jpg'
+          result.actors.push(existing)
+          result.actorThumbs.set(actor.name, actorThumbRef(actor.name, ext, platform) as string)
+          continue
+        }
         report({ stage: 'actor', index: idx, total, label: actor.name })
-        result.actors.push(existing)
-        continue
+        const img = await downloadBuffer(getBinary, actor.avatarUrl, referer)
+        if (!img) continue
+        const ext = chooseExtension(img.buffer, inferExtension(actor.avatarUrl))
+        if (usesActorsDir(platform)) fs.mkdirSync(paths.actorThumbsDir, { recursive: true })
+        const target = actorThumbPath(paths.dir, actor.name, ext, platform)
+        writeFileSafe(target, img.buffer)
+        result.actors.push(target)
+        result.actorThumbs.set(actor.name, actorThumbRef(actor.name, ext, platform) as string)
+      } else {
+        // Infuse：不下载本地文件，查 DMM 无防盗链远程 URL 写进 NFO
+        report({ stage: 'actor', index: idx, total, label: actor.name })
+        if (!httpForDmm) continue
+        const remote = await findDmmActressAvatar(httpForDmm, actor.name)
+        if (remote) {
+          result.actorThumbs.set(actor.name, remote)
+        }
       }
-      report({ stage: 'actor', index: idx, total, label: actor.name })
-      const img = await downloadBuffer(getBinary, actor.avatarUrl, referer)
-      if (!img) continue
-      const ext = chooseExtension(img.buffer, inferExtension(actor.avatarUrl))
-      const target = actorThumbPath(paths.actorsDir, actor.name, ext)
-      writeFileSafe(target, img.buffer)
-      result.actors.push(target)
     }
     report({
       stage: 'actor',
       index: total,
       total,
       done: true,
-      count: result.actors.length
+      count: result.actorThumbs.size
     })
   }
 
@@ -342,8 +385,31 @@ export async function downloadImages(
 export function createBinaryGetter(http: Pick<HttpClient, 'getBuffer'>): BinaryGetter {
   return async (url: string, referer: string) => {
     const res = await http.getBuffer(url, {
-      headers: { referer, accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' }
+      headers: { referer: refererForImageUrl(url, referer), accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' }
     })
     return { buffer: res.buffer, ext: inferExtension(url) }
   }
+}
+
+/**
+ * 按图片 URL 所在 CDN 推导正确的 Referer。
+ * 多数 CDN 要求带「图片同源 origin」或「来源页」才能绕过防盗链；
+ * 但少数 CDN（aventertainments）带外站 Referer 反而返回 403，必须不带 Referer。
+ *
+ * @param fallback 没有专用规则时使用的来源页 Referer（通常是刮削源页面 origin）
+ * @returns 实际应发送的 Referer；空字符串表示不发送
+ */
+export function refererForImageUrl(url: string, fallback: string): string {
+  let host = ''
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return fallback
+  }
+  // DMM 图片 CDN 无防盗链，但统一带 dmm.co.jp 最稳妥
+  if (host === 'pics.dmm.co.jp' || host.endsWith('.dmm.co.jp')) return DMM_REFERER
+  // aventertainments（Kin8tream/无码欧美片封面 CDN）：带外站 Referer 返回 403，不带才 200
+  if (host.endsWith('.aventertainments.com') || host === 'aventertainments.com') return ''
+  // 其余 CDN 默认回退调用方传入的来源页 Referer
+  return fallback
 }

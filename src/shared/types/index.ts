@@ -7,5 +7,23 @@ export type {
   SiteId,
   FolderNamingMode,
   CropMode,
+  ActorAvatarPlatform,
   Settings
 } from './settings'
+export type {
+  ToolId,
+  CropInput,
+  CropExportOptions,
+  ProbeHit,
+  ProbeResult,
+  ProbeChannelStatus,
+  ProbeChannelState,
+  ProbeEvent,
+  CropVariant,
+  CropPreviewResult,
+  ScanWork,
+  ScanResult,
+  AvatarStage,
+  AvatarProgress,
+  AvatarSummary
+} from './tools'

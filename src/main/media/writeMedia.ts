@@ -28,12 +28,12 @@ export function writeNfoFile(
   data: ScrapedMetadata,
   posterFile: string | undefined,
   fanartFile: string | undefined,
-  downloadActorAvatars: boolean
+  actorThumbs?: Map<string, string>
 ): void {
   const xml = buildNfoXml(data, {
-    includeLocalActorThumbs: downloadActorAvatars,
     posterFile,
-    fanartFile
+    fanartFile,
+    actorThumbs
   })
   fs.mkdirSync(path.dirname(nfoPath), { recursive: true })
   const tmp = `${nfoPath}.writing`
@@ -59,7 +59,7 @@ function findExistingMedia(dir: string, baseName: string, suffix: string): strin
 }
 
 export async function writeMediaAssets(
-  http: Pick<HttpClient, 'getBuffer'>,
+  http: Pick<HttpClient, 'getBuffer' | 'getText'>,
   videoFilePath: string,
   data: ScrapedMetadata,
   parsed: ParsedName | null,
@@ -85,17 +85,25 @@ export async function writeMediaAssets(
     }
   }
 
-  const images = await downloadImages(createBinaryGetter(http), videoFilePath, data, {
-    downloadHdCover: settings.downloadHdCover,
-    downloadActorAvatars: settings.downloadActorAvatars,
-    downloadSamples: settings.downloadSamples,
-    cropMode: settings.cropMode,
-    removeWatermark: settings.removeWatermark,
-    number: data.number,
-    parsed,
-    dmmEnabled: settings.enabledSites.includes(DMM_SITE_ID),
-    onProgress
-  })
+  const images = await downloadImages(
+    createBinaryGetter(http),
+    videoFilePath,
+    data,
+    {
+      downloadHdCover: settings.downloadHdCover,
+      downloadActorAvatars: settings.downloadActorAvatars,
+      actorAvatarPlatform: settings.actorAvatarPlatform,
+      downloadSamples: settings.downloadSamples,
+      cropMode: settings.cropMode,
+      removeWatermark: settings.removeWatermark,
+      number: data.number,
+      parsed,
+      dmmEnabled: settings.enabledSites.includes(DMM_SITE_ID),
+      onProgress
+    },
+    // Infuse 平台需要用 DMM 查远程头像 URL（getText 抓女优列表页）
+    settings.actorAvatarPlatform === 'Infuse' ? http : undefined
+  )
 
   let nfoPath: string | null = null
   if (settings.generateNfo) {
@@ -104,7 +112,7 @@ export async function writeMediaAssets(
       data,
       baseNameOf(images.poster),
       baseNameOf(images.fanart),
-      settings.downloadActorAvatars
+      images.actorThumbs
     )
     nfoPath = paths.nfoPath
   }
@@ -114,7 +122,7 @@ export async function writeMediaAssets(
     posterPath: images.poster,
     fanartPath: images.fanart,
     sampleCount: images.samples.length,
-    actorCount: images.actors.length,
+    actorCount: images.actorThumbs.size,
     skippedNfo: false,
     notes: []
   }

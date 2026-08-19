@@ -1,9 +1,17 @@
 import { app, dialog, ipcMain, shell } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { IPC } from '../shared/channels'
 import type { Engine } from './engine'
 import type { SettingsStore } from './store/settingsStore'
+import type { ToolRunner } from './tools/toolRunner'
+import type { CropExportOptions } from '../shared/types'
 
-export function registerIpc(engine: Engine, settingsStore: SettingsStore): void {
+export function registerIpc(
+  engine: Engine,
+  settingsStore: SettingsStore,
+  tools: ToolRunner,
+  getMainWindow: () => BrowserWindow | null
+): void {
   ipcMain.handle(IPC.ENGINE_ADD_PATHS, (_e, paths: string[]) => engine.addPaths(paths ?? []))
 
   ipcMain.handle(IPC.ENGINE_START_ALL, () => engine.startAll())
@@ -31,18 +39,51 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
   })
 
   ipcMain.handle(IPC.DIALOG_SELECT_FOLDER, async () => {
-    const result = await dialog.showOpenDialog({
+    const win = getMainWindow()
+    const result = await dialog.showOpenDialog(win ?? undefined as never, {
       title: '选择媒体文件夹',
       properties: ['openDirectory']
     })
     return result.canceled ? [] : result.filePaths
   })
 
+  ipcMain.handle(
+    IPC.DIALOG_SAVE_FILE,
+    async (_e, defaultName: string, filters?: { name: string; extensions: string[] }[]) => {
+      const win = getMainWindow()
+      const result = await dialog.showSaveDialog(win ?? undefined as never, {
+        title: '保存海报',
+        defaultPath: defaultName,
+        filters: filters && filters.length > 0 ? filters : [{ name: 'JPEG', extensions: ['jpg'] }]
+      })
+      return result.canceled ? '' : result.filePath
+    }
+  )
+
   ipcMain.handle(IPC.SETTINGS_GET, () => settingsStore.getAll())
 
   ipcMain.handle(IPC.SETTINGS_SET, (_e, patch: unknown) => settingsStore.update(patch))
 
   ipcMain.handle(IPC.READ_IMAGE, (_e, source: string) => engine.readImage(source))
+
+  ipcMain.handle(IPC.TOOLS_PROBE, (_e, number: string) => tools.probe(number))
+
+  ipcMain.handle(IPC.TOOLS_CROP_PREVIEW, (_e, input) => tools.cropPreview(input))
+
+  ipcMain.handle(
+    IPC.TOOLS_CROP_EXPORT,
+    (_e, options: CropExportOptions, targetPath: string) => tools.cropExport(options, targetPath)
+  )
+
+  ipcMain.handle(IPC.TOOLS_SCAN, (_e, rootDir: string) => tools.scan(rootDir))
+
+  ipcMain.handle(
+    IPC.TOOLS_AVATARS_START,
+    (_e, rootDir: string, options: { updateNfo: boolean }) =>
+      tools.backfillAvatars(rootDir, options ?? { updateNfo: false })
+  )
+
+  ipcMain.handle(IPC.TOOLS_AVATARS_CANCEL, () => tools.cancelAvatars())
 
   ipcMain.handle('app:openPath', async (_e, target: string) => {
     if (typeof target === 'string' && target.length > 0) await shell.openPath(target)
@@ -59,9 +100,16 @@ export function registerIpc(engine: Engine, settingsStore: SettingsStore): void 
       IPC.ENGINE_CLEAR_FINISHED,
       IPC.DIALOG_SELECT_FILES,
       IPC.DIALOG_SELECT_FOLDER,
+      IPC.DIALOG_SAVE_FILE,
       IPC.SETTINGS_GET,
       IPC.SETTINGS_SET,
       IPC.READ_IMAGE,
+      IPC.TOOLS_PROBE,
+      IPC.TOOLS_CROP_PREVIEW,
+      IPC.TOOLS_CROP_EXPORT,
+      IPC.TOOLS_SCAN,
+      IPC.TOOLS_AVATARS_START,
+      IPC.TOOLS_AVATARS_CANCEL,
       'app:openPath'
     ] as const) {
       ipcMain.removeHandler(channel)

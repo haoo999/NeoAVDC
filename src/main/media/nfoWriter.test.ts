@@ -83,9 +83,17 @@ test('buildNfoXml 缺失可选字段时不输出空元素', () => {
   assert.ok(!xml.includes('<cover>'))
 })
 
-test('buildNfoXml 下载演员头像时引用本地 .actors 路径', () => {
-  const xml = buildNfoXml(BASE, { includeLocalActorThumbs: true })
-  assert.ok(xml.includes('<thumb>.actors/葵つかさ.jpg</thumb>'))
+test('buildNfoXml 演员头像按 actorThumbs 映射写入（Infuse 远程 URL / Kodi 本地路径）', () => {
+  const xml = buildNfoXml(BASE, {
+    actorThumbs: new Map([
+      ['葵つかさ', 'https://pics.dmm.co.jp/mono/actjpgs/aoi_tukasa.jpg']
+    ])
+  })
+  assert.ok(
+    xml.includes('<thumb>https://pics.dmm.co.jp/mono/actjpgs/aoi_tukasa.jpg</thumb>')
+  )
+  // 未命中映射的演员不输出 thumb
+  assert.ok(!/<name>鷲尾めい<\/name>[\s\S]*?<thumb>/.test(xml))
 })
 
 test('buildNfoXml 可覆盖本地封面/海报文件名', () => {

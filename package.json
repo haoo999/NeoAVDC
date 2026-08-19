@@ -10,7 +10,10 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --test \"out-test/**/*.test.js\" && rm -rf out-test"
+    "test": "tsc -p tsconfig.test.json && node --test \"out-test/**/*.test.js\" && rm -rf out-test",
+    "postinstall": "electron-builder install-app-deps",
+    "pack:dir": "npm run build && electron-builder --dir",
+    "dist:mac": "npm run build && electron-builder --mac --universal --publish never"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
@@ -23,14 +26,66 @@
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.0",
     "@fontsource/sora": "^5.1.0",
+    "@img/sharp-darwin-x64": "^0.33.5",
+    "@img/sharp-libvips-darwin-x64": "^1.0.4",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.haoo.neoavdc",
+    "productName": "NeoAVDC",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   },
   "allowScripts": {
     "electron@33.4.11": true,

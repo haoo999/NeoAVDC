@@ -1,8 +1,10 @@
 import {
+  ACTOR_AVATAR_PLATFORMS,
   CROP_MODES,
   FOLDER_NAMING_MODES,
   ORGANIZE_MODES,
   SITE_IDS,
+  type ActorAvatarPlatform,
   type CropMode,
   type FolderNamingMode,
   type OrganizeMode,
@@ -15,6 +17,7 @@ const SITE_SET = new Set<string>(SITE_IDS)
 const NAMING_SET = new Set<string>(FOLDER_NAMING_MODES)
 const CROP_SET = new Set<string>(CROP_MODES)
 const ORGANIZE_SET = new Set<string>(ORGANIZE_MODES)
+const AVATAR_PLATFORM_SET = new Set<string>(ACTOR_AVATAR_PLATFORMS)
 
 function asSiteArray(value: unknown): SiteId[] {
   if (!Array.isArray(value)) return DEFAULT_SETTINGS.enabledSites
@@ -40,6 +43,12 @@ function asOrganizeMode(value: unknown): OrganizeMode {
   return typeof value === 'string' && ORGANIZE_SET.has(value)
     ? (value as OrganizeMode)
     : DEFAULT_SETTINGS.organizeMode
+}
+
+function asAvatarPlatform(value: unknown): ActorAvatarPlatform {
+  return typeof value === 'string' && AVATAR_PLATFORM_SET.has(value)
+    ? (value as ActorAvatarPlatform)
+    : DEFAULT_SETTINGS.actorAvatarPlatform
 }
 
 function asNonEmptyString(value: unknown): string {
@@ -77,6 +86,7 @@ export function sanitizeSettings(input: unknown): Settings {
       raw['downloadActorAvatars'],
       DEFAULT_SETTINGS.downloadActorAvatars
     ),
+    actorAvatarPlatform: asAvatarPlatform(raw['actorAvatarPlatform']),
     skipExistingNfo: asBool(raw['skipExistingNfo'], DEFAULT_SETTINGS.skipExistingNfo)
   }
 }

@@ -12,6 +12,10 @@ export function useImageSource(source: string | null | undefined): string | null
       setDataUrl(null)
       return
     }
+    if (source.startsWith('data:')) {
+      setDataUrl(source)
+      return
+    }
     let cancelled = false
     const api = window.neoavdc
     if (!api) return

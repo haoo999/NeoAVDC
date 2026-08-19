@@ -23,14 +23,13 @@ export function createHttpClient(config: ScraperConfig): HttpClient {
 
 // DMM 只作为图片 CDN 兜底（见 media/dmmCdn.ts），不是元数据源，这里不注册。
 //
-// 顺序很关键：HEYZO / FC2 是专用源，对不匹配的番号零网络开销直接 not_found，
-// 放在最前可以让 Heyzo/FC2 番号优先命中官方源，而不是被 JavBus/JavDB 的二次搜索兜底。
+// HEYZO / FC2 是专用源：按番号类型自动路由，对不匹配的番号零网络开销直接 not_found，
+// 因此它们始终启用、不跟随设置页的数据源开关，并固定排在最前优先命中官方源，
+// 避免被 JavBus/JavDB 的二次搜索兜底。
 export function createSources(siteIds: SiteId[]): ScrapeSource[] {
-  const sources: ScrapeSource[] = []
+  const sources: ScrapeSource[] = [new HeyzoSource(), new Fc2Source()]
   for (const id of siteIds) {
-    if (id === 'Heyzo') sources.push(new HeyzoSource())
-    else if (id === 'FC2') sources.push(new Fc2Source())
-    else if (id === 'JavBus') sources.push(new JavBusSource())
+    if (id === 'JavBus') sources.push(new JavBusSource())
     else if (id === 'JavDB') sources.push(new JavDbSource())
     else if (id === 'Jav321') sources.push(new Jav321Source())
   }

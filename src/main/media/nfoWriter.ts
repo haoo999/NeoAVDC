@@ -1,9 +1,12 @@
 import type { ScrapedMetadata } from '../../shared/types'
 
 export interface NfoOptions {
-  includeLocalActorThumbs?: boolean
   posterFile?: string
   fanartFile?: string
+  // 演员名 → NFO <thumb> 引用。由调用方按目标平台解析：
+  // Kodi/Emby/Jellyfin/Plex 为 .actors/ 下相对路径；Infuse 为 DMM 远程 URL。
+  // 未命中的演员不输出 <thumb>。
+  actorThumbs?: Map<string, string>
 }
 
 function escapeXml(text: string): string {
@@ -30,19 +33,10 @@ function yearOf(releaseDate?: string): string {
   return m ? m[1] : ''
 }
 
-function actorThumbUrl(name: string, includeLocal: boolean, remoteUrl?: string): string {
-  if (includeLocal) return `.actors/${encodeActorFile(name)}.jpg`
-  return remoteUrl ?? ''
-}
-
-function encodeActorFile(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'actor'
-}
-
-function renderActors(data: ScrapedMetadata, includeLocal: boolean): string {
+function renderActors(data: ScrapedMetadata, actorThumbs?: Map<string, string>): string {
   return data.actors
     .map((a) => {
-      const thumb = actorThumbUrl(a.name, includeLocal, a.avatarUrl)
+      const thumb = actorThumbs?.get(a.name) ?? ''
       const thumbLine = thumb ? `\n    <thumb>${escapeXml(thumb)}</thumb>` : ''
       return `  <actor>\n    <name>${escapeXml(a.name)}</name>${thumbLine}\n    <type>Actor</type>\n  </actor>\n`
     })
@@ -50,7 +44,6 @@ function renderActors(data: ScrapedMetadata, includeLocal: boolean): string {
 }
 
 export function buildNfoXml(data: ScrapedMetadata, options: NfoOptions = {}): string {
-  const includeLocal = options.includeLocalActorThumbs ?? false
   const year = yearOf(data.releaseDate)
   const mpaa = data.isUncensored ? 'R18+' : 'NC-17'
   const title = data.title || data.number
@@ -87,7 +80,7 @@ export function buildNfoXml(data: ScrapedMetadata, options: NfoOptions = {}): st
     parts.push(artLines.join(''))
   }
   if (posterRef) parts.push(`  <cover>${escapeXml(posterRef)}</cover>\n`)
-  parts.push(renderActors(data, includeLocal))
+  parts.push(renderActors(data, options.actorThumbs))
   parts.push(element('website', data.sourceUrl))
   parts.push('</movie>\n')
   return parts.join('')

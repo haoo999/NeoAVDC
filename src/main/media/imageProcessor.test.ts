@@ -38,11 +38,26 @@ test('横版全封面：needsCrop / targetPosterWidth / cropLeft', () => {
   // 800x538（JavBus 全封面）：2:3 目标宽 = 538*2/3 ≈ 359，需裁宽
   assert.equal(targetPosterWidth(538), Math.round(538 * POSTER_ASPECT))
   assert.equal(needsCrop(800, 538), true)
-  // right 取右侧正面：800-359 = 441
-  assert.equal(cropLeft('right', 800, 359), 441)
-  // center 居中：(800-359)/2 = 221（四舍五入 221）
+  // center 居中：(800-359)/2 ≈ 221
   assert.equal(cropLeft('center', 800, 359), 221)
   assert.equal(cropLeft('full', 800, 359), 0)
+})
+
+test('cropLeft right 模式取右半正面并居中，保留靠近书脊的正面', () => {
+  // 800x538：右半从 x=400 开始，正面宽 400；目标 359 比正面窄，
+  // 在正面内居中：400 + (400-359)/2 = 421（旧逻辑紧贴右边缘取 x=441，
+  // 会切掉书脊旁约 20px 正面）
+  const left = cropLeft('right', 800, 359)
+  assert.equal(left, 421)
+  // 裁切框必须落在正面内（左边界 >= 右半起点 400），且不越过右边缘
+  assert.ok(left >= 400, `left ${left} 应不早于右半起点 400`)
+  assert.ok(left + 359 <= 800)
+})
+
+test('cropLeft right 模式正面比 2:3 窄时右对齐回退', () => {
+  // 构造一个正面（右半）比目标还窄的极端横版图：宽 500，目标宽 359，
+  // 右半宽 250 < 359，应右对齐取 500-359=141
+  assert.equal(cropLeft('right', 500, 359), 141)
 })
 
 test('processPoster 把横版全封面 right 裁成 2:3 竖海报', async () => {

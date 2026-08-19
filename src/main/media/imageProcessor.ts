@@ -6,12 +6,14 @@ export interface ProcessInput {
   buffer: Buffer
   crop: CropMode
   removeWatermark: boolean
+  maxWidth?: number
 }
 
 export interface ProcessResult {
   buffer: Buffer
   width: number
   height: number
+  contentType: string
 }
 
 export function targetPosterHeight(srcWidth: number): number {
@@ -40,16 +42,27 @@ export function cropTop(crop: CropMode, srcHeight: number, targetHeight: number)
 }
 
 /**
+ * 横版包装盒封面右半（正面封面）占全图宽度的比例。
+ */
+const RIGHT_HALF_RATIO = 0.5
+
+/**
  * 计算水平方向的裁切偏移。
  * 横版全封面（背面|书脊|正面）转竖海报时：
- * - right：取右半边（正面封面）
- * - center：水平居中
  * - full：不裁切
+ * - center：水平居中
+ * - right：先取右半正面（书脊折痕以右），再在正面内居中取 2:3；
+ *   若正面比 2:3 还窄则右对齐回退。
  */
 export function cropLeft(crop: CropMode, srcWidth: number, targetWidth: number): number {
-  if (crop === 'right') return Math.max(0, srcWidth - targetWidth)
   if (crop === 'full') return 0
-  return Math.max(0, Math.round((srcWidth - targetWidth) / 2))
+  if (crop === 'center') return Math.max(0, Math.round((srcWidth - targetWidth) / 2))
+  const halfStart = Math.round(srcWidth * RIGHT_HALF_RATIO)
+  const faceWidth = srcWidth - halfStart
+  if (faceWidth >= targetWidth) {
+    return halfStart + Math.max(0, Math.round((faceWidth - targetWidth) / 2))
+  }
+  return Math.max(0, srcWidth - targetWidth)
 }
 
 export function watermarkRegion(
@@ -77,8 +90,8 @@ async function blurWatermarkRegion(buffer: Buffer): Promise<Buffer> {
 
 export async function processPoster(input: ProcessInput): Promise<ProcessResult> {
   const sharp = (await import('sharp')).default
-  let pipeline = sharp(input.buffer).rotate()
-  const meta = await pipeline.metadata()
+  const probe = sharp(input.buffer).rotate()
+  const meta = await probe.metadata()
   const srcWidth = meta.width ?? 0
   const srcHeight = meta.height ?? 0
 
@@ -105,10 +118,17 @@ export async function processPoster(input: ProcessInput): Promise<ProcessResult>
     working = await blurWatermarkRegion(working)
   }
 
-  const out = await sharp(working)
-    .jpeg({ quality: 90, mozjpeg: true })
-    .toBuffer({ resolveWithObject: true })
-  return { buffer: out.data, width: out.info.width, height: out.info.height }
+  let pipeline = sharp(working).jpeg({ quality: 90, mozjpeg: true })
+  if (input.maxWidth) {
+    pipeline = pipeline.resize({ width: input.maxWidth, withoutEnlargement: true })
+  }
+  const out = await pipeline.toBuffer({ resolveWithObject: true })
+  return {
+    buffer: out.data,
+    width: out.info.width,
+    height: out.info.height,
+    contentType: 'image/jpeg'
+  }
 }
 
 export async function removeWatermark(buffer: Buffer): Promise<Buffer> {
