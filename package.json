@@ -1,6 +1,6 @@
 {
   "name": "neoavdc",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "NeoAVDC - media metadata scraper, Electron rewrite of AVDC",
   "main": "./out/main/index.js",
   "author": "haoo",
