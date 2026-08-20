@@ -6,6 +6,8 @@
 ![](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)
 ![](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
+**简体中文** · [English](./README.en.md)
+
 本地运行的 AV 元数据刮削器：从文件名识别番号 → 抓取元数据与图片 → sharp 裁切海报 → 生成 [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → 原地收纳为带海报的番号资料夹。图形界面，数据全部保存在本地，不上传任何内容。
 
 > 本项目是对旧版 [moyy996/AVDC](https://github.com/moyy996/AVDC)（Python/PyQt5）的 Electron + React + TypeScript 重构，在此向原作者 [yoshiko2](https://github.com/yoshiko2/AV_Data_Capture) 与 [moyy996](https://github.com/moyy996/AVDC) 致谢。当前阶段：刮削 / 图片 / NFO / 多数据源 / 工具页已落地，软链接、番号识别容错等救援能力在 Roadmap 上继续推进。
