@@ -8,9 +8,13 @@
 
 **简体中文** · [English](./README.en.md)
 
-本地运行的 AV 元数据刮削器：从文件名识别番号 → 抓取元数据与图片 → sharp 裁切海报 → 生成 [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → 原地收纳为带海报的番号资料夹。图形界面，数据全部保存在本地，不上传任何内容。
+本地运行的 AV 元数据刮削器（JAV metadata scraper）：从文件名识别番号 → 抓取元数据与图片 → sharp 裁切海报 → 生成 [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → 原地收纳为带海报的番号资料夹。图形界面，数据全部保存在本地，不上传任何内容。可作为已停更的旧版 [AVDC](https://github.com/moyy996/AVDC) 与已归档的 [mdcx](https://github.com/sqzw-x/mdcx) 的现代化替代，配合 Kodi、Emby、Jellyfin、Plex、Infuse 使用。
 
-> 本项目是对旧版 [moyy996/AVDC](https://github.com/moyy996/AVDC)（Python/PyQt5）的 Electron + React + TypeScript 重构，在此向原作者 [yoshiko2](https://github.com/yoshiko2/AV_Data_Capture) 与 [moyy996](https://github.com/moyy996/AVDC) 致谢。当前阶段：刮削 / 图片 / NFO / 多数据源 / 工具页已落地，软链接、番号识别容错等救援能力在 Roadmap 上继续推进。
+![NeoAVDC 主界面（深色主题）：拖入视频、任务时间线、刮削进度](docs/screenshots/main.png)
+![NeoAVDC 刮削完成：右侧详情栏展开，显示裁切后的 2:3 竖海报（示例已打码）、标题与元数据](docs/screenshots/detail.png)
+![NeoAVDC 工具页：番号速查、海报裁切、封面扫描、演员头像回填](docs/screenshots/tools.png)
+
+> 本项目是对旧版 [moyy996/AVDC](https://github.com/moyy996/AVDC)（Python/PyQt5，2023 年起停止维护）的 Electron + React + TypeScript 重构，在此向原作者 [yoshiko2](https://github.com/yoshiko2/AV_Data_Capture) 与 [moyy996](https://github.com/moyy996/AVDC) 致谢。当前阶段：刮削 / 图片 / NFO / 多数据源 / 工具页已落地，软链接、番号识别容错等救援能力在 Roadmap 上继续推进。
 
 ## 目录
 
@@ -23,10 +27,11 @@
   - [4.3 源码运行](#43-源码运行)
   - [4.4 配置说明](#44-配置说明)
 - [5. 工具](#5-工具)
-- [6. 异常处理](#6-异常处理)
-- [7. FAQ](#7-faq)
-- [8. 声明](#8-声明)
-- [9. 写在后面](#9-写在后面)
+- [6. 从旧版 AVDC / mdcx 迁移](#6-从旧版-avdc--mdcx-迁移)
+- [7. 异常处理](#7-异常处理)
+- [8. FAQ](#8-faq)
+- [9. 声明](#9-声明)
+- [10. 写在后面](#10-写在后面)
 
 ## 1. 简介
 
@@ -123,6 +128,8 @@
 4. 刮削成功后，视频及同名字幕会被原地收纳为番号子文件夹，内含 `poster.jpg`、`fanart.jpg`、`extrafanart/`、`.actors/`、`<番号>.nfo` 等产物。
 5. 将收纳后的目录导入 Kodi / Emby / Jellyfin / Plex / Infuse 即可。
 
+![NeoAVDC 设置页：刮削源开关与排序、代理、命名与收纳规则](docs/screenshots/settings.png)
+
 ### 4.3 源码运行
 
 环境要求：Node.js 20+，npm。
@@ -161,7 +168,22 @@ npm run dist:linux   # 打包 Linux x64 AppImage 到 release/
 
 > 旧版 AVDC 的「单文件刮削」在新版由主界面详情面板的就地修正番号 + 单任务重刮覆盖；「Emby 批量上传头像」未迁移，新版统一使用 `.actors/` 本地头像 + NFO 相对路径，由媒体库自身扫描导入。
 
-## 6. 异常处理
+## 6. 从旧版 AVDC / mdcx 迁移
+
+如果你正在用旧版 [moyy996/AVDC](https://github.com/moyy996/AVDC)（2023 年起停止维护）、[yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture)，或是已归档的 [sqzw-x/mdcx](https://github.com/sqzw-x/mdcx)，迁移到 NeoAVDC 成本很低：
+
+- **已有媒体库保持原样**。收纳产物遵循相同的 Kodi 生态约定——番号文件夹内 `poster.jpg`、`fanart.jpg`、`extrafanart/`、`.actors/`、`<番号>.nfo`，无需重新刮削；把 NeoAVDC 指向同一个库即可增量补刮。
+- **文件名规则兼容**。有码/无码/FC2/HEYZO/多碟/`-C` 等识别模式一致，现有文件名无需改名。
+- **原生三平台安装包**。macOS universal DMG、Windows NSIS、Linux AppImage；macOS 上不再有 PyQt5 环境折腾。
+- **更丰富的数据源，自动路由**。JavBus / JavDB / Jav321 可开关排序；HEYZO / FC2 按番号类型自动启用，对常规有码番号零开销。
+- **开箱即得更好的海报**。基于实测书脊折痕位置裁切横版封面为 2:3 竖海报，而不是容易切到书脊的居中裁切。
+- **仅保留女优 + 头像跨作品复用**。解析阶段按性别过滤，头像按演员名落盘一次、全库复用。
+- **Infuse 支持**。NFO 可写无防盗链的远程 DMM 头像 URL，替代本地 `.actors/`。
+- **就地修正番号**。识别错误时在详情面板直接改番号、单任务重刮，并记录手动标记。
+
+暂未迁移的旧版能力：软链接/不移动文件刮削模式（Roadmap 中）；部分旧版一次性小工具（多数已被详情面板重刮与工具页取代）。如果你依赖的某个工作流缺失，欢迎提 issue 说明（加 `migration` 标签）。
+
+## 7. 异常处理
 
 - **番号识别失败 / 异常**：检查文件名是否符合[第 3 节](#3-常见番号命名规范必看)规范，或在详情面板手动修正番号后重新刮削。
 - **网络错误 / 403 / 超时**：检查代理设置；DMM 需使用日本节点；图片代理已按 CDN 自适应 Referer，若仍失败可在设置里切换刮削源。
@@ -170,7 +192,7 @@ npm run dist:linux   # 打包 Linux x64 AppImage 到 release/
 - **跨卷收纳失败**：收纳逻辑会自动回退为同卷移动并在时间线日志提示，检查源盘与目标盘空间/权限。
 - **Plex 不显示封面**：需安装 NFO 导入插件 [XBMCnfoMoviesImporter](https://github.com/gboudreau/XBMCnfoMoviesImporter.bundle)。
 
-## 7. FAQ
+## 8. FAQ
 
 **Q：这软件能下片吗？**
 A：不提供任何影片下载地址，仅供本地已有的影片做分类与元数据整理。
@@ -182,22 +204,24 @@ A：永久免费、开源（MIT）。
 A：所有数据保存在本地。除了向你在设置中启用的刮削源与图片 CDN 发起必要的请求外，不向任何第三方上传内容。
 
 **Q：支持哪些平台？**
-A：官方提供 macOS universal 安装包；源码可在 Windows / Linux 上运行（未官方测试与打包）。
+A：官方提供 macOS universal / Windows x64 / Linux x64 三平台安装包（见[第 4.1 节](#41-下载)）；也可从源码运行。
 
 **Q：与旧版 AVDC 的区别？**
-A：基于 Electron + React + TypeScript 重写，新增多数据源按番号类型自动路由、sharp 海报裁切与真实书脊几何、主进程图片代理（Referer 自适应）、Infuse 远程头像、原地/统一收纳根目录、时间线活动行日志、就地修正番号重刮等。
+A：基于 Electron + React + TypeScript 重写，新增多数据源按番号类型自动路由、sharp 海报裁切与真实书脊几何、主进程图片代理（Referer 自适应）、Infuse 远程头像、原地/统一收纳根目录、时间线活动行日志、就地修正番号重刮等。详见[第 6 节](#6-从旧版-avdc--mdcx-迁移)。
+
+**Q：mdcx 归档了，可以用这个替代吗？**
+A：可以。NeoAVDC 的收纳产物与文件名识别规则和 mdcx / AVDC 系工具兼容，迁移成本低，参见[第 6 节](#6-从旧版-avdc--mdcx-迁移)。
 
 **Q：支持软链接模式吗？**
 A：尚未实现，在 Roadmap 中。
 
-## 8. 声明
+## 9. 声明
 
 当你查阅、下载或使用本项目源代码或二进制程序，即代表你接受以下条款。
 
 **中文**
 - 本软件仅供技术交流、学术交流与个人本地媒体库整理使用。
-- 请勿在热门社交平台上宣传此项目。
-- 本软件不提供任何影片下载线索。
+- 请勿在公开渠道以此软件的名义宣传影片内容或提供下载线索；本软件自身不提供任何影片下载线索。
 - 用户在使用前请了解并遵守当地法律法规；如使用过程中存在违反当地法律法规的行为，请勿使用。
 - 用户在当地产生的一切违法行为由用户自行承担，与本项目作者无关。
 - 严禁将本软件用于商业用途。
@@ -206,8 +230,7 @@ A：尚未实现，在 Roadmap 中。
 
 **English**
 - This software is provided for technical exchange, academic research, and personal local media library organization only.
-- Please do not promote this project on popular social platforms.
-- This software does not provide any clues for downloading videos.
+- Do not use this software's name to promote film content or provide download leads on public channels; the software itself provides no clues for downloading videos.
 - Before using this software, please understand and comply with your local laws and regulations. Do not use it if any violation may occur.
 - Users are solely responsible for any illegal acts arising from their use; the author bears no liability.
 - Commercial use of this software is strictly prohibited.
@@ -216,15 +239,14 @@ A：尚未实现，在 Roadmap 中。
 
 **日本語**
 - 本ソフトウェアは技術交流、学術研究、および個人のローカルメディアライブラリ整理のみを目的としています。
-- 人気のソーシャルプラットフォームで本プロジェクトを宣伝しないでください。
-- 本ソフトウェアは動画ダウンロードの手がかりを一切提供しません。
+- 本ソフトウェアの名義で動画コンテンツの宣伝やダウンロードの手がかりの提供を行わないでください。本ソフトウェア自体は動画ダウンロードの手がかりを一切提供しません。
 - ご利用前に現地の法令を理解し遵守してください。法令に違反する可能性がある場合は使用しないでください。
 - 利用により生じた違法行為については利用者自身が責任を負い、作者は一切責任を負いません。
 - 本ソフトウェアの商業利用を固く禁じます。
 - 本プロジェクトは [moyy996/AVDC](https://github.com/moyy996/AVDC)（[yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture) 由来）のリライトです。原作者に感謝すると共に、原プロジェクトは各々のライセンスと権利を保持します。
 - 上記事項に同意いただけない場合は、本ソフトウェアを使用しないでください。
 
-## 9. 写在后面
+## 10. 写在后面
 
 把自己收藏的影片整齐地刮削成带海报、女优头像与 NFO 的番号资料夹，再导入媒体库浏览——希望它能帮你省下一点重复劳动。
 

@@ -4,9 +4,18 @@ import type { ActorAvatarPlatform, ScanResult, ScanWork } from '../../shared/typ
 
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp']
 
+// 探测路径必须仍落在 dir 内，防止 baseName 含 .. 等片段时越出工作目录
+function safeProbePath(dir: string, fileName: string): string | null {
+  const candidate = path.join(dir, fileName)
+  const rel = path.relative(dir, candidate)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null
+  return candidate
+}
+
 function findMediaFile(dir: string, baseName: string, suffix: string): boolean {
   for (const ext of IMAGE_EXTS) {
-    const candidate = path.join(dir, `${baseName}${suffix}${ext}`)
+    const candidate = safeProbePath(dir, `${baseName}${suffix}${ext}`)
+    if (!candidate) continue
     try {
       if (fs.statSync(candidate).isFile()) return true
     } catch {

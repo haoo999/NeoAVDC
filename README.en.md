@@ -8,9 +8,13 @@
 
 [简体中文](./README.md) · **English**
 
-A local AV metadata scraper: recognize the movie code from a filename → fetch metadata and images → crop the poster with sharp → generate a [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → organize everything into a numbered folder with artwork. A graphical app that keeps **all data on your own machine** — nothing is uploaded.
+A local AV metadata scraper (JAV metadata scraper): recognize the movie code from a filename → fetch metadata and images → crop the poster with sharp → generate a [Kodi NFO](https://kodi.wiki/view/NFO_files/Movies) → organize everything into a numbered folder with artwork. A graphical app that keeps **all data on your own machine** — nothing is uploaded. It works as a modern replacement for the unmaintained legacy [AVDC](https://github.com/moyy996/AVDC) and the archived [mdcx](https://github.com/sqzw-x/mdcx), feeding Kodi, Emby, Jellyfin, Plex, and Infuse.
 
-> NeoAVDC is an Electron + React + TypeScript rewrite of the legacy [moyy996/AVDC](https://github.com/moyy996/AVDC) (Python/PyQt5), which itself traces back to [yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture). Credit goes to the original authors. Current status: scraping / images / NFO / multiple sources / tools are shipped; symlink mode and code-recognition tolerance remain on the roadmap.
+![NeoAVDC main window (dark theme): drag in videos, task timeline, scrape progress](docs/screenshots/main.png)
+![NeoAVDC after a successful scrape: detail panel expanded on the right, showing the cropped 2:3 poster (blurred in this sample), title and metadata](docs/screenshots/detail.png)
+![NeoAVDC tools page: code lookup, poster crop preview, cover scan, actress avatar backfill](docs/screenshots/tools.png)
+
+> NeoAVDC is an Electron + React + TypeScript rewrite of the legacy [moyy996/AVDC](https://github.com/moyy996/AVDC) (Python/PyQt5, unmaintained since 2023), which itself traces back to [yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture). Credit goes to the original authors. Current status: scraping / images / NFO / multiple sources / tools are shipped; symlink mode and code-recognition tolerance remain on the roadmap.
 
 ## Table of Contents
 
@@ -85,6 +89,8 @@ See all versions on the [Releases](https://github.com/haoo999/NeoAVDC/releases) 
 4. On success, the video and matching subtitles are organized into a numbered folder containing `poster.jpg`, `fanart.jpg`, `extrafanart/`, `.actors/`, `<code>.nfo`, etc.
 5. Import the organized folders into Kodi / Emby / Jellyfin / Plex / Infuse.
 
+![NeoAVDC settings page: scraping source toggles and ordering, proxy, naming and organize rules](docs/screenshots/settings.png)
+
 ## Run from source
 
 Requires Node.js 20+ and npm.
@@ -144,17 +150,20 @@ Free forever, open source under MIT.
 All data stays local. Apart from necessary requests to the scraping sources and image CDNs you enable, nothing is uploaded to any third party.
 
 **Which platforms are supported?**
-Official builds for macOS (universal), Windows (x64), and Linux (x64, AppImage).
+Official builds for macOS (universal), Windows (x64), and Linux (x64, AppImage). Running from source also works.
 
 **How is it different from legacy AVDC?**
 It's a full rewrite on Electron + React + TypeScript, adding multi-source routing by code type, sharp poster cropping with real spine geometry, a main-process image proxy with adaptive `Referer`, Infuse remote avatars, in-place/central library organizing, an activity timeline, and in-place code correction with re-scrape. See [Migrating from legacy AVDC](#migrating-from-legacy-avdc).
+
+**mdcx is archived — can I use this instead?**
+Yes. NeoAVDC's output layout and filename recognition are compatible with mdcx / AVDC-family tools, so migration is cheap. See [Migrating from legacy AVDC](#migrating-from-legacy-avdc).
 
 **Is symlink mode supported?**
 Not yet — it's on the roadmap (for PT users who don't want the original files moved).
 
 ## Migrating from legacy AVDC
 
-If you currently use [moyy996/AVDC](https://github.com/moyy996/AVDC) or [yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture), here's what changes.
+If you currently use [moyy996/AVDC](https://github.com/moyy996/AVDC) (unmaintained since 2023), [yoshiko2/AV_Data_Capture](https://github.com/yoshiko2/AV_Data_Capture), or the archived [sqzw-x/mdcx](https://github.com/sqzw-x/mdcx), migrating to NeoAVDC is cheap:
 
 - **Your existing library stays as-is.** The output layout follows the same Kodi ecosystem conventions — `poster.jpg`, `fanart.jpg`, `extrafanart/`, `.actors/`, `<code>.nfo` inside a numbered folder — so you don't have to re-scrape from scratch. You can point NeoAVDC at the same library and scrape incrementally.
 - **Filename rules are compatible.** The same censored/uncensored/FC2/HEYZO/multi-disc/`-C` patterns are recognized, so your existing filenames keep working.
@@ -176,8 +185,7 @@ If something you relied on is missing, open an issue with the `migration` label 
 By reading, downloading, or using this source code or binaries, you accept the following terms.
 
 - This software is provided for technical exchange, academic research, and personal local media library organization only.
-- Please do not promote this project on popular social platforms.
-- This software provides no clues for downloading videos.
+- Do not use this software's name to promote film content or provide download leads on public channels; the software itself provides no clues for downloading videos.
 - Before using, understand and comply with your local laws and regulations. Do not use it if any violation may occur.
 - Users are solely responsible for any illegal acts arising from their use; the author bears no liability.
 - Commercial use is strictly prohibited.

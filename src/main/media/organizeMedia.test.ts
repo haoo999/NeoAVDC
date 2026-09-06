@@ -9,7 +9,7 @@ const DATA = { title: 'SSIS-001 タイトル', actors: [{ name: '葵' }] }
 
 function tmpVideo(file = 'SSIS-001.mp4'): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avdc-org-'))
-  const p = path.join(dir, file)
+  const p = path.join(dir, path.basename(file))
   fs.writeFileSync(p, 'video')
   return p
 }
