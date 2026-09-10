@@ -101,24 +101,24 @@
 
 ### 3.8 文件名建议
 
-越接近纯番号识别率越高；多余的前缀、发布组、画质标签等可能干扰识别，可在刮削前用批量重命名工具清理。
+推荐以番号为主命名，但常见噪声可自动容忍，无需手工清理：发布组前缀（`hhd800.com@`、`22-sht.me@`）、方括号标签（`[Thz.la]`、`【最新作品】`）、画质后缀（`1080p`、`4K`、`FHD`、`-UC`）、番号中夹空格（`SSNI - 111`）以及多词写法（`HEYZO 1234`、`FC2 PPV 1234567`）都能正确识别。
 
 ## 4. 如何使用
 
 ### 4.1 下载
 
-**Release v0.0.2**：
+**Release v0.0.3**：
 
-- **macOS**（universal，Intel + Apple Silicon）：[NeoAVDC-0.0.2-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-universal.dmg)
-- **Windows**（x64，NSIS 安装包）：[NeoAVDC-0.0.2-x64.exe](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.exe)
-- **Linux**（x64，AppImage）：[NeoAVDC-0.0.2-x64.AppImage](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.AppImage)
+- **macOS**（universal，Intel + Apple Silicon）：[NeoAVDC-0.0.3-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-universal.dmg)
+- **Windows**（x64，NSIS 安装包）：[NeoAVDC-0.0.3-x64.exe](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-x64.exe)
+- **Linux**（x64，AppImage）：[NeoAVDC-0.0.3-x64.AppImage](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-x64.AppImage)
 
 全部版本见 [Releases](../../releases) 页面。也支持从源码运行（参见 [4.3 源码运行](#43-源码运行)）。
 
 > 本版本未做代码签名（macOS 无 Developer ID、Windows 无 EV 证书）。
 > - **macOS**：首次打开如遇「无法验证开发者」，在「系统设置 → 隐私与安全性」中点击「仍要打开」，或对解压后的 app 执行 `xattr -dr com.apple.quarantine /Applications/NeoAVDC.app`。
 > - **Windows**：SmartScreen 可能提示「Windows 已保护你的电脑」，点击「更多信息 → 仍要运行」。
-> - **Linux**：下载后给 AppImage 加可执行权限 `chmod +x NeoAVDC-0.0.2-x64.AppImage` 后直接运行。
+> - **Linux**：下载后给 AppImage 加可执行权限 `chmod +x NeoAVDC-0.0.3-x64.AppImage` 后直接运行。
 
 ### 4.2 简明教程
 

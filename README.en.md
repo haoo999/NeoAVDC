@@ -64,22 +64,22 @@ The closer the filename is to a clean code, the higher the recognition rate. Cas
 - **Chinese-subtitled releases**: `ssni-001-c.mp4`, `ssni-001-C.mp4`, `abp-001-CD1-C.mp4` — the suffix must sit right before the extension, i.e. `-C.mp4`.
 - **Multi-disc**: `ssni-001-cd1.mp4`, `ssni-001-CD2.mp4`. Disc first, subtitle second (`abp-001-CD1-C.mp4`). `-A/-B/-1/-2` are not supported to avoid clashing with the `-C` subtitle suffix.
 - **External subtitles**: the subtitle filename must match the video filename (extension aside) to be moved together. `srt`, `ass`, `sub` supported.
-- Strip extra prefixes, release-group tags, and quality labels before scraping; a bulk-rename tool helps.
+- Naming the file after the code is recommended, but common noise is tolerated automatically — no manual cleanup needed: release-group prefixes (`hhd800.com@`, `22-sht.me@`), bracket tags (`[Thz.la]`, `【最新作品】`), quality suffixes (`1080p`, `4K`, `FHD`, `-UC`), spaces inside the code (`SSNI - 111`), and multi-word forms (`HEYZO 1234`, `FC2 PPV 1234567`) are all recognized.
 
 ## Download
 
-**Release v0.0.2**:
+**Release v0.0.3**:
 
-- **macOS** (universal, Intel + Apple Silicon): [NeoAVDC-0.0.2-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-universal.dmg)
-- **Windows** (x64, NSIS installer): [NeoAVDC-0.0.2-x64.exe](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.exe)
-- **Linux** (x64, AppImage): [NeoAVDC-0.0.2-x64.AppImage](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.2/NeoAVDC-0.0.2-x64.AppImage)
+- **macOS** (universal, Intel + Apple Silicon): [NeoAVDC-0.0.3-universal.dmg](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-universal.dmg)
+- **Windows** (x64, NSIS installer): [NeoAVDC-0.0.3-x64.exe](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-x64.exe)
+- **Linux** (x64, AppImage): [NeoAVDC-0.0.3-x64.AppImage](https://github.com/haoo999/NeoAVDC/releases/download/v0.0.3/NeoAVDC-0.0.3-x64.AppImage)
 
 See all versions on the [Releases](https://github.com/haoo999/NeoAVDC/releases) page. Running from source is also supported (see [Run from source](#run-from-source)).
 
 > The binaries are not code-signed (no Apple Developer ID, no Windows EV certificate).
 > - **macOS**: on first launch, if you see "cannot verify developer", go to **System Settings → Privacy & Security** and click "Open Anyway", or run `xattr -dr com.apple.quarantine /Applications/NeoAVDC.app`.
 > - **Windows**: SmartScreen may show "Windows protected your PC" — click "More info → Run anyway".
-> - **Linux**: `chmod +x NeoAVDC-0.0.2-x64.AppImage` then run it.
+> - **Linux**: `chmod +x NeoAVDC-0.0.3-x64.AppImage` then run it.
 
 ## Quick start
 
