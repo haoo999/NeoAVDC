@@ -215,6 +215,47 @@ describe('parseNumberFromFileName', () => {
     assert.equal(parseNumberFromFileName('Vacation 2024.mp4'), null)
     assert.equal(parseNumberFromFileName('README FIRST.txt'), null)
   })
+
+  // —— 脏文件名回归：此前会识别失败或标错（实际使用反馈） ——
+
+  it('番号与分隔符之间夹空格仍可识别', () => {
+    assert.equal(parseNumberFromFileName('SSNI - 111.mp4')?.number, 'SSNI-111')
+    assert.equal(parseNumberFromFileName('SSNI- 111.mp4')?.number, 'SSNI-111')
+  })
+
+  it('纯空格分隔的大写番号可识别', () => {
+    assert.equal(parseNumberFromFileName('SSNI 111.mp4')?.number, 'SSNI-111')
+  })
+
+  it('多词 HEYZO 写法可识别', () => {
+    assert.equal(parseNumberFromFileName('Heyzo 1234 HD.mp4')?.number, 'HEYZO-1234')
+    assert.equal(parseNumberFromFileName('HEYZO 1234.mp4')?.number, 'HEYZO-1234')
+  })
+
+  it('多词 FC2 写法可识别', () => {
+    assert.equal(parseNumberFromFileName('FC2 PPV 1234567.mp4')?.number, 'FC2-PPV-1234567')
+    assert.equal(parseNumberFromFileName('FC2 1234567.mp4')?.number, 'FC2-PPV-1234567')
+  })
+
+  it('Tokyo Hot 空格分隔写法可识别', () => {
+    assert.equal(parseNumberFromFileName('Tokyo Hot n1234.mp4')?.number, 'n1234')
+  })
+
+  it('数字字母混合厂牌保留三位数字前缀', () => {
+    assert.equal(parseNumberFromFileName('259LUXU-1234.mp4')?.number, '259LUXU-1234')
+    assert.equal(parseNumberFromFileName('300MIUM-456.mp4')?.number, '300MIUM-456')
+  })
+
+  it('无扩展名（引擎传入的 fileName）也能标出字幕标记', () => {
+    const r = parseNumberFromFileName('SSIS-001-C')
+    assert.ok(r)
+    assert.equal(r.number, 'SSIS-001')
+    assert.equal(r.hasSubtitleMark, true)
+  })
+
+  it('ppv 等噪声前缀不被当成番号厂牌', () => {
+    assert.notEqual(parseNumberFromFileName('heydouga 4017-ppv123.mp4')?.number, 'PPV-123')
+  })
 })
 
 describe('isVideoFile / isSubtitleFile', () => {

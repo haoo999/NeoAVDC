@@ -263,14 +263,15 @@ export class Engine {
       return
     }
 
-    const metadata = await this.scrapeNumber(sources, ctx, number, parsed)
-    if (!metadata) {
+    const found = await this.scrapeNumber(sources, ctx, number, parsed)
+    if (!found) {
       this.markFailed(task, '未找到元数据')
       return
     }
+    const metadata = found.data
 
     task.title = metadata.title
-    task.website = sources[0].id
+    task.website = found.sourceId
     task.metadata = this.toTaskMetadata(metadata)
     task.coverUrl = metadata.coverUrl || null
     task.status = 'scraping'
@@ -413,12 +414,12 @@ export class Engine {
     ctx: ScrapeContext,
     number: string,
     parsed: ParsedName | null
-  ): Promise<ScrapedMetadata | null> {
+  ): Promise<{ data: ScrapedMetadata; sourceId: string } | null> {
     for (const source of sources) {
       this.log('info', `[${source.id}] 查询 ${number}`)
       try {
         const outcome = await source.scrape(ctx, number, parsed)
-        if (outcome.ok) return outcome.data
+        if (outcome.ok) return { data: outcome.data, sourceId: source.id }
         if (outcome.reason === 'not_found') {
           this.log('warn', `[${source.id}] 未找到 ${number}`)
         } else {
