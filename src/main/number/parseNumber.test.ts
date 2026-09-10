@@ -256,6 +256,20 @@ describe('parseNumberFromFileName', () => {
   it('ppv 等噪声前缀不被当成番号厂牌', () => {
     assert.notEqual(parseNumberFromFileName('heydouga 4017-ppv123.mp4')?.number, 'PPV-123')
   })
+
+  it('发布组域名紧贴番号时整段剥离', () => {
+    assert.equal(parseNumberFromFileName('hhd800.comcwp-119.mp4')?.number, 'CWP-119')
+    assert.equal(parseNumberFromFileName('hhd800.comcwp00119.mp4')?.number, 'CWP-119')
+    assert.equal(parseNumberFromFileName('hhd800.com@cwp-119.mp4')?.number, 'CWP-119')
+  })
+
+  it('数字段前导零归一化', () => {
+    assert.equal(parseNumberFromFileName('cwp00119.mp4')?.number, 'CWP-119')
+    assert.equal(parseNumberFromFileName('CWP-00119.mp4')?.number, 'CWP-119')
+    // 前导零归零后仍按不足三位补零
+    assert.equal(parseNumberFromFileName('ABC-012.mp4')?.number, 'ABC-012')
+    assert.equal(parseNumberFromFileName('SSIS-001.mp4')?.number, 'SSIS-001')
+  })
 })
 
 describe('isVideoFile / isSubtitleFile', () => {

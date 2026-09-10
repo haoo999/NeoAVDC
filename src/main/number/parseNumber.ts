@@ -5,7 +5,10 @@ const VIDEO_EXTS = [
 const SUBTITLE_EXTS = ['.srt', '.ass', '.sub', '.vtt', '.ssa']
 
 // 全串级别剥离的噪声（发布组域名、分辨率、方括号日期前缀等）
+// 发布组域名要整段剥掉：hhd800.com 这类会紧贴番号（hhd800.comcwp-119），
+// 若只去掉 hhd800 会留下 .com 残渣被当成厂牌前缀，故域名规则须排在前面
 const GLOBAL_STRIP_RE: ReadonlyArray<readonly [RegExp, string]> = [
+  [/[a-z0-9-]+\.(?:com|net|org|cc|la|me|xyz|top|site|info)/gi, ''],
   [/22-sht\.me/gi, ''],
   [/hhd800/gi, ''],
   [/[-_ ]?1080p/gi, ' '],
@@ -84,8 +87,10 @@ function cleanToken(raw: string): string {
   return s.replace(/^[-_.]+|[-_.]+$/g, '')
 }
 
+// 番号数字段归一化：先去掉前导零（cwp00119 → 119），再补足 3 位（ABC-12 → ABC-012）
 function padCensoredDigits(num: string): string {
-  return num.length < 3 ? num.padStart(3, '0') : num
+  const trimmed = num.replace(/^0+(?=\d)/, '')
+  return trimmed.length < 3 ? trimmed.padStart(3, '0') : trimmed
 }
 
 function tokenize(base: string): string[] {
